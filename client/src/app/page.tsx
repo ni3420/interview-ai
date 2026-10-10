@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { SignInButton, SignUpButton } from "@clerk/nextjs";
 import { Sparkles, FileText, Brain, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,12 +12,12 @@ export default function Home() {
         <div className="container flex h-16 items-center justify-between px-4">
           <span className="text-xl font-semibold">Interview AI</span>
           <div className="flex items-center gap-4">
-            <SignInButton mode="modal">
+            <Link href="/sign-in">
               <Button variant="ghost">Sign In</Button>
-            </SignInButton>
-            <SignUpButton mode="modal">
+            </Link>
+            <Link href="/sign-up">
               <Button>Get Started</Button>
-            </SignUpButton>
+            </Link>
           </div>
         </div>
       </header>
@@ -38,15 +37,15 @@ export default function Home() {
               with adaptive follow-up questions and detailed feedback reports.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <SignUpButton mode="modal">
+              <Link href="/sign-up">
                 <Button size="lg" className="gap-2">
                   Start Free Interview
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              </SignUpButton>
-              <SignInButton mode="modal">
+              </Link>
+              <Link href="/sign-in">
                 <Button size="lg" variant="outline">Sign In</Button>
-              </SignInButton>
+              </Link>
             </div>
           </div>
         </section>

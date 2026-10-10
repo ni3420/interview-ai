@@ -7,7 +7,7 @@ import { LayoutDashboard, FileText, History, Settings } from "lucide-react";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Interviews", href: "/interviews", icon: FileText },
+  { name: "Interviews", href: "/interview/setup", icon: FileText },
   { name: "History", href: "/history", icon: History },
   { name: "Settings", href: "/settings", icon: Settings },
 ];
