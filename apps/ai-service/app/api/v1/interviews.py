@@ -1,0 +1,87 @@
+from fastapi import APIRouter, Depends, HTTPException, Security
+from fastapi.security import APIKeyHeader
+from app.schemas.interview import (
+    InterviewPlanRequest,
+    InterviewPlanResponse,
+    NextQuestionRequest,
+    NextQuestionResponse,
+    ErrorResponse,
+)
+from app.ai.providers.gemini import gemini_provider
+from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT
+from app.core.config import settings
+import json
+
+router = APIRouter()
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if api_key != settings.service_api_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return api_key
+
+
+def parse_json_response(response: str) -> dict:
+    try:
+        return json.loads(response)
+    except json.JSONDecodeError:
+        start = response.find("{")
+        end = response.rfind("}") + 1
+        if start >= 0 and end > start:
+            return json.loads(response[start:end])
+        raise ValueError("Invalid JSON response from AI")
+
+
+@router.post(
+    "/plan",
+    response_model=InterviewPlanResponse,
+    responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    dependencies=[Depends(verify_api_key)],
+)
+async def generate_interview_plan(request: InterviewPlanRequest):
+    prompt = INTERVIEW_PLAN_PROMPT.format(
+        resume_text=request.resume_text,
+        job_description=request.job_description,
+    )
+    try:
+        response = await gemini_provider.generate(prompt)
+        data = parse_json_response(response)
+        return InterviewPlanResponse(
+            questions=data.get("questions", []),
+            focus_areas=data.get("focus_areas", []),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate plan: {str(e)}")
+
+
+@router.post(
+    "/next-question",
+    response_model=NextQuestionResponse,
+    responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    dependencies=[Depends(verify_api_key)],
+)
+async def generate_next_question(request: NextQuestionRequest):
+    previous_qa_str = "\n".join(
+        [f"Q: {qa.get('question', '')}\nA: {qa.get('answer', '')}" for qa in request.previous_qa]
+    ) or "None"
+
+    prompt = NEXT_QUESTION_PROMPT.format(
+        resume_text=request.resume_text,
+        job_description=request.job_description,
+        current_question=request.current_question,
+        user_answer=request.user_answer,
+        question_index=request.question_index,
+        previous_qa=previous_qa_str,
+    )
+    try:
+        response = await gemini_provider.generate(prompt)
+        data = parse_json_response(response)
+        return NextQuestionResponse(
+            question=data.get("question", ""),
+            is_follow_up=data.get("is_follow_up", False),
+            follow_up_count=data.get("follow_up_count", 0),
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate question: {str(e)}")
