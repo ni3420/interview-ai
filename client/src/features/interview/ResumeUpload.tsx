@@ -10,7 +10,10 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import * as pdfjsLib from "pdfjs-dist";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+// Reliable CDN fallback worker setup
+if (typeof window !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+}
 
 interface ResumeUploadProps {
   onResumeTextChange: (text: string) => void;
@@ -24,7 +27,8 @@ export function ResumeUpload({ onResumeTextChange, resumeText, isProcessing }: R
 
   const extractTextFromPDF = useCallback(async (file: File): Promise<string> => {
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
     let fullText = "";
 
     for (let i = 1; i <= pdf.numPages; i++) {
@@ -55,7 +59,7 @@ export function ResumeUpload({ onResumeTextChange, resumeText, isProcessing }: R
 
     try {
       const text = await extractTextFromPDF(file);
-      if (text.trim().length < 100) {
+      if (text.trim().length < 50) {
         toast.error("Could not extract enough text from PDF. Please try a different file.", { id: "pdf-extract" });
         return;
       }
@@ -64,7 +68,7 @@ export function ResumeUpload({ onResumeTextChange, resumeText, isProcessing }: R
       toast.success("Resume uploaded successfully", { id: "pdf-extract" });
     } catch (error) {
       toast.error("Failed to extract text from PDF", { id: "pdf-extract" });
-      console.error(error);
+      console.error("PDF Extraction Error:", error);
     }
   }, [extractTextFromPDF, onResumeTextChange]);
 

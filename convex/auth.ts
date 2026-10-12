@@ -14,7 +14,7 @@ export async function getAuthUserId(ctx: QueryCtx | MutationCtx): Promise<Id<"us
 
 export async function requireAuthUserId(ctx: QueryCtx | MutationCtx): Promise<Id<"users">> {
   const userId = await getAuthUserId(ctx);
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId) throw new Error("Unauthorized ");
   return userId;
 }
 

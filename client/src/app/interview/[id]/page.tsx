@@ -4,14 +4,11 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { ArrowLeft, Send, Loader2, CheckCircle, Clock, AlertCircle, Brain } from "lucide-react";
+import { ArrowLeft, Send, Loader2, CheckCircle, Clock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "@/lib/date-utils";
 import { generateNextQuestion } from "@/lib/ai-service";
 
 interface InterviewMessage {
@@ -62,39 +59,46 @@ export default function InterviewPage() {
   const [currentAnswer, setCurrentAnswer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
 
+  // Sync messages from database when interview or answers update
   useEffect(() => {
     if (interview && answers) {
       const initialMessages: InterviewMessage[] = [];
-      
-      if (interview.plan && Array.isArray(interview.plan.questions)) {
-        interview.plan.questions.forEach((q: string, idx: number) => {
+      const currentIdx = interview.currentQuestionIndex ?? 0;
+      const questionsList = interview.plan?.questions || [];
+
+      for (let idx = 0; idx <= currentIdx && idx < questionsList.length; idx++) {
+        const qText = questionsList[idx];
+        
+        if (qText) {
           initialMessages.push({
             role: "assistant",
-            content: q,
+            content: qText,
             questionIndex: idx,
           });
-          const answer = answers.find((a: InterviewAnswer) => a.questionIndex === idx);
-          if (answer) {
-            initialMessages.push({
-              role: "user",
-              content: answer.answer,
-              questionIndex: idx,
-            });
-            if (answer.followUpCount > 0) {
-              for (let i = 0; i < answer.followUpCount; i++) {
-                initialMessages.push({
-                  role: "assistant",
-                  content: `[Follow-up ${i + 1} would appear here]`,
-                  questionIndex: idx,
-                  isFollowUp: true,
-                });
-              }
+        }
+
+        const answer = answers.find((a: InterviewAnswer) => a.questionIndex === idx);
+        if (answer) {
+          initialMessages.push({
+            role: "user",
+            content: answer.answer,
+            questionIndex: idx,
+          });
+
+          if (answer.followUpCount > 0) {
+            for (let i = 0; i < answer.followUpCount; i++) {
+              initialMessages.push({
+                role: "assistant",
+                content: `[Follow-up question ${i + 1}]`,
+                questionIndex: idx,
+                isFollowUp: true,
+              });
             }
           }
-        });
+        }
       }
+
       setMessages(initialMessages);
     }
   }, [interview, answers]);
@@ -106,81 +110,100 @@ export default function InterviewPage() {
   }, [interview, updateStatus, interviewId]);
 
   const currentQuestionIndex = interview?.currentQuestionIndex ?? 0;
-  const currentQuestion = messages.find(
-    (m) => m.role === "assistant" && m.questionIndex === currentQuestionIndex && !m.isFollowUp
-  );
+  const totalQuestions = interview?.plan?.questions?.length || 0;
+  const isCompleted = totalQuestions > 0 && currentQuestionIndex >= totalQuestions;
+  
+  const questionsList = interview?.plan?.questions || [];
+  const currentQuestionText = questionsList[currentQuestionIndex];
 
-const handleSubmitAnswer = async () => {
-    if (!currentAnswer.trim() || !currentQuestion || !interview) return;
+  const handleSubmitAnswer = async () => {
+    if (!currentAnswer.trim() || !currentQuestionText || !interview) return;
 
     setIsSubmitting(true);
     try {
+      // 1. Save Answer to Database
       await saveAnswer({
         interviewId,
         questionIndex: currentQuestionIndex,
-        question: currentQuestion.content,
+        question: currentQuestionText,
         answer: currentAnswer,
         followUpCount: 0,
       });
 
-      setMessages((prev) => [...prev, { role: "user", content: currentAnswer, questionIndex: currentQuestionIndex }]);
+      // 2. Local State for UI updates
+      const submittedAnswerText = currentAnswer;
       setCurrentAnswer("");
+      setMessages((prev) => [...prev, { role: "user", content: submittedAnswerText, questionIndex: currentQuestionIndex }]);
 
-      // Prepare previous Q&A for context
-      const previousQA = messages
-        .filter((m) => m.questionIndex !== undefined && m.questionIndex < currentQuestionIndex)
-        .map((m) => ({ question: m.content, answer: "" }))
-        .filter((m) => m.question);
-
-      // Get user answers for previous questions
       const userAnswers = messages.filter((m) => m.role === "user" && m.questionIndex !== undefined);
       const qaPairs = userAnswers
         .map((ua) => {
-          const q = messages.find((m) => m.role === "assistant" && m.questionIndex === ua.questionIndex && !m.isFollowUp);
-          return q ? { question: q.content, answer: ua.content } : null;
+          const q = questionsList[ua.questionIndex ?? 0];
+          return q ? { question: q, answer: ua.content } : null;
         })
         .filter((item): item is { question: string; answer: string } => item !== null);
 
       setIsGeneratingQuestion(true);
+      
       try {
         const nextQ = await generateNextQuestion({
           resume_text: interview.resumeText,
           job_description: interview.jobDescription,
-          current_question: currentQuestion.content,
-          user_answer: currentAnswer,
+          current_question: currentQuestionText,
+          user_answer: submittedAnswerText,
           question_index: currentQuestionIndex,
           previous_qa: qaPairs,
         });
 
         if (nextQ.is_follow_up && nextQ.follow_up_count < 3) {
-          // Add follow-up question
+          // Follow-up question stay on current index
           setMessages((prev) => [...prev, {
             role: "assistant",
             content: nextQ.question,
             questionIndex: currentQuestionIndex,
             isFollowUp: true,
           }]);
-          // Update follow-up count in the answer
-          const existingAnswer = answers.find((a: InterviewAnswer) => a.questionIndex === currentQuestionIndex);
-          if (existingAnswer) {
-            await saveAnswer({
-              interviewId,
-              questionIndex: currentQuestionIndex,
-              question: currentQuestion.content,
-              answer: currentAnswer,
-              followUpCount: nextQ.follow_up_count,
-            });
-          }
+          
+          await saveAnswer({
+            interviewId,
+            questionIndex: currentQuestionIndex,
+            question: currentQuestionText,
+            answer: submittedAnswerText,
+            followUpCount: nextQ.follow_up_count,
+          });
         } else {
-          // Move to next question
+          // 3. Move to Next Question & Update Progress
           await incrementQuestion({ interviewId });
+
+          const nextIdx = currentQuestionIndex + 1;
+          if (nextIdx < questionsList.length) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "assistant",
+                content: questionsList[nextIdx],
+                questionIndex: nextIdx,
+              },
+            ]);
+          }
         }
-        toast.success("Answer saved! Generating next question...");
+        toast.success("Answer saved!");
       } catch (aiError) {
-        console.error("AI question generation failed:", aiError);
-        // Fallback: just increment question
+        console.error("AI generation failed:", aiError);
+        // Fallback: Increment index on failure so user is never stuck
         await incrementQuestion({ interviewId });
-        toast.error("Failed to generate follow-up. Moving to next question.");
+        
+        const nextIdx = currentQuestionIndex + 1;
+        if (nextIdx < questionsList.length) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: questionsList[nextIdx],
+              questionIndex: nextIdx,
+            },
+          ]);
+        }
       } finally {
         setIsGeneratingQuestion(false);
       }
@@ -193,10 +216,19 @@ const handleSubmitAnswer = async () => {
   };
 
   const handleSkip = async () => {
-    if (!currentQuestion) return;
     setIsSubmitting(true);
     try {
       await incrementQuestion({ interviewId });
+      
+      const nextIdx = currentQuestionIndex + 1;
+      if (nextIdx < questionsList.length) {
+        setMessages((prev) => [
+          ...prev,
+          { role: "user", content: "[Skipped]", questionIndex: currentQuestionIndex },
+          { role: "assistant", content: questionsList[nextIdx], questionIndex: nextIdx }
+        ]);
+      }
+      
       toast.success("Question skipped");
     } catch (error) {
       toast.error("Failed to skip");
@@ -226,9 +258,8 @@ const handleSubmitAnswer = async () => {
     );
   }
 
-  const progress = interview.plan && Array.isArray(interview.plan.questions)
-    ? Math.round(((currentQuestionIndex + 1) / interview.plan.questions.length) * 100)
-    : 0;
+  // Exact progress calculation based on answered questions
+  const progress = totalQuestions > 0 ? Math.min(Math.round(((currentQuestionIndex) / totalQuestions) * 100), 100) : 0;
 
   const statusConfig: Record<InterviewStatus, { label: string; color: string; bg: string }> = {
     setup: { label: "Setup", color: "text-muted-foreground", bg: "bg-muted" },
@@ -250,7 +281,7 @@ const handleSubmitAnswer = async () => {
             <div>
               <h1 className="font-semibold">Interview Session</h1>
               <p className="text-sm text-muted-foreground">
-                Question {currentQuestionIndex + 1} of {interview.plan && Array.isArray(interview.plan.questions) ? interview.plan.questions.length : "?"}
+                Question {Math.min(currentQuestionIndex + 1, totalQuestions)} of {totalQuestions}
               </p>
             </div>
           </div>
@@ -289,49 +320,53 @@ const handleSubmitAnswer = async () => {
               </div>
             ))}
 
-            {currentQuestion && (
+            {isGeneratingQuestion && (
               <div className="flex justify-start">
-                <div className="max-w-[85%] bg-muted rounded-2xl rounded-bl-sm px-4 py-3 border border-primary/20">
-                  <p className="font-medium">{currentQuestion.content}</p>
+                <div className="bg-muted rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Analyzing and generating next question...</span>
                 </div>
               </div>
             )}
 
-            <div className="flex justify-end">
-              <div className="max-w-[85%]">
-                <Textarea
-                  value={currentAnswer}
-                  onChange={(e) => setCurrentAnswer(e.target.value)}
-                  placeholder="Type your answer here..."
-                  rows={4}
-                  disabled={isSubmitting || !currentQuestion}
-                  className="mb-3"
-                />
-                <div className="flex gap-2 justify-end">
-                  {currentQuestion ? (
-                    <>
+            <div className="flex justify-end pt-2">
+              <div className="w-full max-w-[85%]">
+                {!isCompleted ? (
+                  <>
+                    <Textarea
+                      value={currentAnswer}
+                      onChange={(e) => setCurrentAnswer(e.target.value)}
+                      placeholder="Type your answer here..."
+                      rows={4}
+                      disabled={isSubmitting || isGeneratingQuestion}
+                      className="mb-3"
+                    />
+                    <div className="flex gap-2 justify-end">
                       <Button
                         variant="outline"
                         onClick={handleSkip}
-                        disabled={isSubmitting}
+                        disabled={isSubmitting || isGeneratingQuestion}
                       >
                         Skip
                       </Button>
                       <Button
                         onClick={handleSubmitAnswer}
-                        disabled={isSubmitting || !currentAnswer.trim()}
+                        disabled={isSubmitting || isGeneratingQuestion || !currentAnswer.trim()}
                       >
                         <Send className="mr-2 h-4 w-4" />
                         Submit Answer
                       </Button>
-                    </>
-                  ) : (
-                    <Button onClick={handleFinish} disabled={isSubmitting} variant="default">
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center p-6 bg-muted rounded-xl space-y-4">
+                    <h3 className="text-lg font-medium">You have completed all questions!</h3>
+                    <Button onClick={handleFinish} disabled={isSubmitting} size="lg" className="w-full">
                       <CheckCircle className="mr-2 h-4 w-4" />
-                      Finish Interview
+                      Finish & View Report
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
