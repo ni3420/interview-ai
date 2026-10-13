@@ -5,10 +5,13 @@ from app.schemas.interview import (
     InterviewPlanResponse,
     NextQuestionRequest,
     NextQuestionResponse,
+    EvaluationRequest,
+    EvaluationResponse,
+    QuestionScore,
     ErrorResponse,
 )
 from app.ai.providers.gemini import gemini_provider
-from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT
+from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
 from app.core.config import settings
 import json
 
@@ -85,3 +88,36 @@ async def generate_next_question(request: NextQuestionRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate question: {str(e)}")
+
+
+@router.post(
+    "/evaluate",
+    response_model=EvaluationResponse,
+    responses={401: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    dependencies=[Depends(verify_api_key)],
+)
+async def evaluate_interview(request: EvaluationRequest):
+    qa_pairs_str = "\n\n".join(
+        [f"Q{idx + 1}: {qa.get('question', '')}\nA{idx + 1}: {qa.get('answer', '')}"
+         for idx, qa in enumerate(request.qa_pairs)]
+    )
+
+    prompt = EVALUATION_PROMPT.format(
+        resume_text=request.resume_text,
+        job_description=request.job_description,
+        qa_pairs=qa_pairs_str,
+    )
+    try:
+        response = await gemini_provider.generate(prompt)
+        data = parse_json_response(response)
+        return EvaluationResponse(
+            overall_score=data.get("overall_score", 0),
+            strengths=data.get("strengths", []),
+            weaknesses=data.get("weaknesses", []),
+            recommendations=data.get("recommendations", []),
+            question_scores=[
+                QuestionScore(**qs) for qs in data.get("question_scores", [])
+            ],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to evaluate interview: {str(e)}")

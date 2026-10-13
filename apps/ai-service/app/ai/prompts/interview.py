@@ -51,3 +51,44 @@ Return ONLY a JSON object:
   "follow_up_count": 0-3
 }}
 """
+
+EVALUATION_PROMPT = """
+You are an expert interview coach. Evaluate the candidate's complete interview performance and generate a detailed report.
+
+Resume:
+{resume_text}
+
+Job Description:
+{job_description}
+
+Interview Q&A:
+{qa_pairs}
+
+Evaluate each answer against these criteria:
+1. Relevance - Did they address the question?
+2. Depth - Technical accuracy, specificity, examples
+3. Communication - Clarity, structure, confidence
+4. Role Fit - Alignment with job requirements
+
+Return ONLY a JSON object with this structure:
+{{
+  "overall_score": 0-100,
+  "strengths": ["strength 1", "strength 2", ...],
+  "weaknesses": ["weakness 1", "weakness 2", ...],
+  "recommendations": ["actionable recommendation 1", "actionable recommendation 2", ...],
+  "question_scores": [
+    {{"question_index": 0, "score": 0-100, "feedback": "specific feedback for this answer"}},
+    {{"question_index": 1, "score": 0-100, "feedback": "specific feedback for this answer"}}
+  ]
+}}
+
+Scoring guidelines:
+- 90-100: Exceptional - comprehensive, accurate, well-structured
+- 75-89: Strong - good depth, minor gaps
+- 60-74: Adequate - covers basics, some gaps
+- 40-59: Weak - incomplete, inaccurate, or vague
+- 0-39: Poor - minimal effort or fundamentally wrong
+
+Provide 3-5 items each for strengths, weaknesses, recommendations.
+Question scores should reflect individual answer quality.
+"""

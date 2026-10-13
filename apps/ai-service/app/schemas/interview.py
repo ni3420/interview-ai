@@ -27,5 +27,25 @@ class NextQuestionResponse(BaseModel):
     follow_up_count: int = Field(..., ge=0, le=3)
 
 
+class QuestionScore(BaseModel):
+    question_index: int = Field(..., ge=0)
+    score: int = Field(..., ge=0, le=100)
+    feedback: str
+
+
+class EvaluationRequest(BaseModel):
+    resume_text: str
+    job_description: str
+    qa_pairs: list[dict[str, str]] = Field(..., min_length=1)
+
+
+class EvaluationResponse(BaseModel):
+    overall_score: int = Field(..., ge=0, le=100)
+    strengths: list[str] = Field(..., min_length=1, max_length=10)
+    weaknesses: list[str] = Field(..., min_length=1, max_length=10)
+    recommendations: list[str] = Field(..., min_length=1, max_length=10)
+    question_scores: list[QuestionScore]
+
+
 class ErrorResponse(BaseModel):
     error: dict[str, str]
