@@ -14,6 +14,9 @@ from app.ai.providers.gemini import gemini_provider
 from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
 from app.core.config import settings
 import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 router = APIRouter()
 
@@ -56,7 +59,9 @@ async def generate_interview_plan(request: InterviewPlanRequest):
             focus_areas=data.get("focus_areas", []),
         )
     except Exception as e:
+        logging.error("Failed to generate plan", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate plan: {str(e)}")
+        
 
 
 @router.post(
@@ -87,6 +92,7 @@ async def generate_next_question(request: NextQuestionRequest):
             follow_up_count=data.get("follow_up_count", 0),
         )
     except Exception as e:
+        logging.error("Failed to generate question", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate question: {str(e)}")
 
 
@@ -120,4 +126,5 @@ async def evaluate_interview(request: EvaluationRequest):
             ],
         )
     except Exception as e:
+        logging.error("Failed to evaluate interview", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to evaluate interview: {str(e)}")
