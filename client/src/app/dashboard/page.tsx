@@ -28,7 +28,7 @@ import { formatDistanceToNow } from "@/lib/date-utils";
 interface Interview {
   _id: string;
   userId: string;
-  resumeText: string;
+  resumeText?: string;
   jobDescription: string;
   status: "setup" | "in_progress" | "completed" | "failed";
   plan?: { questions?: string[]; focus_areas?: string[] } | null;

@@ -13,7 +13,8 @@ export default defineSchema({
 
   interviews: defineTable({
     userId: v.id("users"),
-    resumeText: v.string(),
+    resumeId: v.optional(v.id("resumes")),
+    resumeText: v.optional(v.string()),
     jobDescription: v.string(),
     status: v.union(
       v.literal("setup"),
@@ -39,6 +40,22 @@ export default defineSchema({
     followUpCount: v.number(),
     createdAt: v.number(),
   }).index("by_interview", ["interviewId"]),
+
+  resumes: defineTable({
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    fileName: v.string(),
+    contentType: v.string(),
+    size: v.number(),
+    status: v.union(
+      v.literal("uploaded"),
+      v.literal("processing"),
+      v.literal("ready"),
+      v.literal("failed")
+    ),
+    uploadedAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 
   reports: defineTable({
     interviewId: v.id("interviews"),

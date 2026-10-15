@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { ArrowLeft, Send, Loader2, CheckCircle, Clock } from "lucide-react";
+import { ArrowLeft, Send, Loader2, CheckCircle, Clock, Brain } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,7 +33,7 @@ type InterviewStatus = "setup" | "in_progress" | "completed" | "failed";
 interface Interview {
   _id: string;
   userId: string;
-  resumeText: string;
+  resumeText?: string;
   jobDescription: string;
   status: InterviewStatus;
   plan?: { questions: string[] } | null;
@@ -117,6 +117,24 @@ export default function InterviewPage() {
   const questionsList = interview?.plan?.questions || [];
   const currentQuestionText = questionsList[currentQuestionIndex];
 
+  if (totalQuestions === 0) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center">
+        <Brain className="h-12 w-12 text-muted-foreground" />
+        <h1 className="text-2xl font-semibold">
+          Interview questions are being prepared
+        </h1>
+        <p className="max-w-md text-muted-foreground">
+          Your resume has been saved. Question generation will be available once
+          resume processing is enabled.
+        </p>
+        <Button asChild>
+          <Link href="/dashboard">Back to Dashboard</Link>
+        </Button>
+      </div>
+    );
+  }
+
   const handleSubmitAnswer = async () => {
     if (!currentAnswer.trim() || !currentQuestionText || !interview) return;
 
@@ -148,7 +166,7 @@ export default function InterviewPage() {
       
       try {
         const nextQ = await generateNextQuestion({
-          resume_text: interview.resumeText,
+          resume_text: interview.resumeText ?? "",
           job_description: interview.jobDescription,
           current_question: currentQuestionText,
           user_answer: submittedAnswerText,

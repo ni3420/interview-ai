@@ -2,36 +2,40 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ResumeUpload } from "@/features/interview/ResumeUpload";
 
-const EXTRACTED_TEXT =
-  "Test resume content that is comfortably longer than the fifty character minimum threshold.";
+const mocks = vi.hoisted(() => ({
+  generateUploadUrl: vi.fn(),
+  saveResume: vi.fn(),
+  deleteResume: vi.fn(),
+}));
 
-vi.mock("pdfjs-dist", () => ({
-  GlobalWorkerOptions: { workerSrc: "" },
-  version: "6.4.299",
-  getDocument: vi.fn(() => ({
-    promise: Promise.resolve({
-      numPages: 1,
-      getPage: vi.fn(() =>
-        Promise.resolve({
-          getTextContent: vi.fn(() =>
-            Promise.resolve({ items: [{ str: EXTRACTED_TEXT }] })
-          ),
-        })
-      ),
-    }),
-  })),
+vi.mock("convex/react", () => ({
+  useMutation: (ref: unknown) => {
+    const key = String(ref);
+    if (key.includes("generateUploadUrl")) return mocks.generateUploadUrl;
+    if (key.includes("saveResume")) return mocks.saveResume;
+    if (key.includes("deleteResume")) return mocks.deleteResume;
+    return vi.fn();
+  },
 }));
 
 describe("ResumeUpload", () => {
-  const mockOnResumeTextChange = vi.fn();
+  const mockOnResumeUploaded = vi.fn();
+  const mockOnResumeRemoved = vi.fn();
   const defaultProps = {
-    onResumeTextChange: mockOnResumeTextChange,
-    resumeText: "",
+    onResumeUploaded: mockOnResumeUploaded,
+    onResumeRemoved: mockOnResumeRemoved,
     isProcessing: false,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.generateUploadUrl.mockResolvedValue("https://upload.example");
+    mocks.saveResume.mockResolvedValue("resume-1");
+    mocks.deleteResume.mockResolvedValue({ success: true });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ storageId: "storage-1" }),
+    }) as unknown as typeof fetch;
   });
 
   it("renders the upload area", () => {
@@ -43,44 +47,51 @@ describe("ResumeUpload", () => {
     expect(screen.getByText("or click to browse")).toBeInTheDocument();
   });
 
-  it("rejects a non-PDF file without extracting text", async () => {
+  it("rejects a non-PDF file without uploading", async () => {
     render(<ResumeUpload {...defaultProps} />);
-    const input = screen.getByLabelText(
-      /Drag & drop your resume/i
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText("Upload resume PDF") as HTMLInputElement;
 
     fireEvent.change(input, {
       target: {
-        files: [new File(["not a pdf"], "resume.txt", { type: "text/plain" })],
+        files: [new File(["x"], "resume.txt", { type: "text/plain" })],
       },
     });
 
     await waitFor(() => {
-      expect(mockOnResumeTextChange).not.toHaveBeenCalled();
+      expect(mockOnResumeUploaded).not.toHaveBeenCalled();
     });
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it("extracts text from a PDF and reports it", async () => {
+  it("uploads a PDF to Convex storage and reports the resume", async () => {
     render(<ResumeUpload {...defaultProps} />);
-    const input = screen.getByLabelText(
-      /Drag & drop your resume/i
-    ) as HTMLInputElement;
+    const input = screen.getByLabelText("Upload resume PDF") as HTMLInputElement;
 
-    const pdfFile = new File(["pdf bytes"], "resume.pdf", {
-      type: "application/pdf",
+    fireEvent.change(input, {
+      target: {
+        files: [
+          new File(["pdf"], "resume.pdf", { type: "application/pdf" }),
+        ],
+      },
     });
-    // jsdom's File may not implement arrayBuffer(); provide one for extraction.
-    if (typeof pdfFile.arrayBuffer !== "function") {
-      (pdfFile as unknown as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer =
-        async () => new ArrayBuffer(8);
-    }
-
-    fireEvent.change(input, { target: { files: [pdfFile] } });
 
     await waitFor(() => {
-      expect(mockOnResumeTextChange).toHaveBeenCalledWith(
-        expect.stringContaining("Test resume content")
-      );
+      expect(mockOnResumeUploaded).toHaveBeenCalledWith({
+        resumeId: "resume-1",
+        fileName: "resume.pdf",
+      });
+    });
+
+    expect(mocks.generateUploadUrl).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://upload.example",
+      expect.objectContaining({ method: "POST" })
+    );
+    expect(mocks.saveResume).toHaveBeenCalledWith({
+      storageId: "storage-1",
+      fileName: "resume.pdf",
+      contentType: "application/pdf",
+      size: 3,
     });
   });
 });

@@ -31,6 +31,12 @@ export const api = {
     getReport: asQueryRef("reports:getReport"),
     getUserReports: asQueryRef("reports:getUserReports"),
   },
+  resume: {
+    generateUploadUrl: asMutationRef("resume:generateUploadUrl"),
+    saveResume: asMutationRef("resume:saveResume"),
+    getMyResume: asQueryRef("resume:getMyResume"),
+    deleteResume: asMutationRef("resume:deleteResume"),
+  },
 };
 
 export const internal = {};

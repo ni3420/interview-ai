@@ -1,109 +1,159 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Upload, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import * as pdfjsLib from "pdfjs-dist";
 
-// Reliable CDN fallback worker setup
-if (typeof window !== "undefined") {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+const MAX_RESUME_BYTES = 5 * 1024 * 1024;
+const RESUME_CONTENT_TYPE = "application/pdf";
+
+interface UploadedResume {
+  resumeId: string;
+  fileName: string;
 }
 
 interface ResumeUploadProps {
-  onResumeTextChange: (text: string) => void;
-  resumeText: string;
+  onResumeUploaded: (resume: UploadedResume) => void;
+  onResumeRemoved?: () => void;
   isProcessing: boolean;
 }
 
-export function ResumeUpload({ onResumeTextChange, resumeText, isProcessing }: ResumeUploadProps) {
+export function ResumeUpload({
+  onResumeUploaded,
+  onResumeRemoved,
+  isProcessing,
+}: ResumeUploadProps) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const [previewText, setPreviewText] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(
+    null
+  );
 
-  const extractTextFromPDF = useCallback(async (file: File): Promise<string> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-    const pdf = await loadingTask.promise;
-    let fullText = "";
+  const generateUploadUrl = useMutation(api.resume.generateUploadUrl);
+  const saveResume = useMutation(api.resume.saveResume);
+  const deleteResume = useMutation(api.resume.deleteResume);
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ");
-      fullText += pageText + "\n";
-    }
+  const handleFileSelect = useCallback(
+    async (selected: File) => {
+      const isPdf =
+        selected.type === RESUME_CONTENT_TYPE ||
+        selected.name.toLowerCase().endsWith(".pdf");
 
-    return fullText;
-  }, []);
-
-  const handleFileSelect = useCallback(async (file: File) => {
-    if (!file.type.includes("pdf")) {
-      toast.error("Please upload a PDF file");
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size must be less than 5MB");
-      return;
-    }
-
-    setIsDragOver(false);
-    toast.loading("Extracting text from PDF...", { id: "pdf-extract" });
-
-    try {
-      const text = await extractTextFromPDF(file);
-      if (text.trim().length < 50) {
-        toast.error("Could not extract enough text from PDF. Please try a different file.", { id: "pdf-extract" });
+      if (!isPdf) {
+        toast.error("Please upload a PDF file");
         return;
       }
-      onResumeTextChange(text);
-      setPreviewText(text.slice(0, 500) + (text.length > 500 ? "..." : ""));
-      toast.success("Resume uploaded successfully", { id: "pdf-extract" });
+
+      if (selected.size > MAX_RESUME_BYTES) {
+        toast.error("File size must be less than 5MB");
+        return;
+      }
+
+      if (selected.size === 0) {
+        toast.error("The selected file is empty");
+        return;
+      }
+
+      setIsUploading(true);
+      setIsDragOver(false);
+
+      const toastId = "resume-upload";
+      toast.loading("Uploading resume...", { id: toastId });
+
+      try {
+        // 1. Ask Convex for a short-lived upload URL.
+        const uploadUrl = await generateUploadUrl();
+
+        // 2. POST the PDF bytes directly to Convex file storage.
+        const response = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": RESUME_CONTENT_TYPE },
+          body: selected,
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to upload resume to storage");
+        }
+
+        const { storageId } = (await response.json()) as {
+          storageId: string;
+        };
+
+        // 3. Persist ownership + metadata. Returns the resume document id.
+        const resumeId = await saveResume({
+          storageId,
+          fileName: selected.name,
+          contentType: RESUME_CONTENT_TYPE,
+          size: selected.size,
+        });
+
+        const resume = { resumeId, fileName: selected.name };
+        setUploadedResume(resume);
+        onResumeUploaded(resume);
+
+        toast.success("Resume uploaded successfully", { id: toastId });
+      } catch (error) {
+        console.error("Resume upload failed:", error);
+        toast.error("Failed to upload resume. Please try again.", {
+          id: toastId,
+        });
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [generateUploadUrl, saveResume, onResumeUploaded]
+  );
+
+  const handleRemove = useCallback(async () => {
+    if (!uploadedResume) return;
+
+    try {
+      await deleteResume({ resumeId: uploadedResume.resumeId });
     } catch (error) {
-      toast.error("Failed to extract text from PDF", { id: "pdf-extract" });
-      console.error("PDF Extraction Error:", error);
+      console.error("Failed to remove resume:", error);
+    } finally {
+      setUploadedResume(null);
+      onResumeRemoved?.();
     }
-  }, [extractTextFromPDF, onResumeTextChange]);
+  }, [deleteResume, uploadedResume, onResumeRemoved]);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
+  const disabled = isUploading || isProcessing;
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragOver(false);
-  };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
     const file = e.dataTransfer.files[0];
-    if (file) handleFileSelect(file);
+    if (file && !disabled) void handleFileSelect(file);
   };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFileSelect(file);
-  };
-
-  const hasResume = resumeText.length > 0;
 
   return (
-    <Card className={cn("transition-all", isDragOver && "border-primary bg-primary/5")}>
+    <Card
+      className={cn(
+        "transition-all",
+        isDragOver && "border-primary bg-primary/5"
+      )}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Resume Upload</CardTitle>
             <CardDescription>Upload your resume as a PDF file</CardDescription>
           </div>
-          {hasResume && (
+
+          {uploadedResume && (
             <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
               <CheckCircle className="h-4 w-4" />
               Ready
@@ -111,56 +161,84 @@ export function ResumeUpload({ onResumeTextChange, resumeText, isProcessing }: R
           )}
         </div>
       </CardHeader>
+
       <CardContent>
         <div
           className={cn(
-            "relative border-2 border-dashed rounded-lg p-8 text-center transition-colors",
-            isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25"
+            "relative rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+            isDragOver
+              ? "border-primary bg-primary/5"
+              : "border-muted-foreground/25",
+            disabled && "pointer-events-none opacity-60"
           )}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!disabled) setIsDragOver(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            setIsDragOver(false);
+          }}
           onDrop={handleDrop}
         >
           <input
             type="file"
-            accept=".pdf"
+            accept=".pdf,application/pdf"
             id="resume-upload"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            onChange={handleFileInputChange}
-            disabled={isProcessing}
+            aria-label="Upload resume PDF"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+            disabled={disabled}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFileSelect(file);
+              // Allow selecting the same file again.
+              e.target.value = "";
+            }}
           />
-          <label htmlFor="resume-upload" className="cursor-pointer">
+
+          <div className="pointer-events-none">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              <Upload className="h-8 w-8 text-muted-foreground" />
+              {isUploading ? (
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              ) : (
+                <Upload className="h-8 w-8 text-muted-foreground" />
+              )}
             </div>
-            <p className="text-lg font-medium">Drag & drop your resume (PDF)</p>
-            <p className="text-sm text-muted-foreground mt-1">or click to browse</p>
-            <p className="text-xs text-muted-foreground mt-2">Max 5MB • PDF only</p>
-          </label>
+
+            <p className="text-lg font-medium">
+              {isUploading
+                ? "Uploading resume..."
+                : "Drag & drop your resume (PDF)"}
+            </p>
+
+            <p className="mt-1 text-sm text-muted-foreground">
+              or click to browse
+            </p>
+
+            <p className="mt-2 text-xs text-muted-foreground">
+              Max 5MB · PDF only
+            </p>
+          </div>
         </div>
 
-        {previewText && (
-          <div className="mt-4 p-4 rounded-lg bg-muted border">
-            <div className="flex items-center justify-between mb-2">
-              <Label className="mb-0 text-sm">Extracted Text Preview</Label>
-              <Button variant="ghost" size="sm" onClick={() => setPreviewText("")}>
-                <span className="sr-only">Remove</span>
-                <AlertCircle className="h-4 w-4" />
-              </Button>
+        {uploadedResume && (
+          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border bg-muted p-4">
+            <div className="flex min-w-0 items-center gap-2">
+              <CheckCircle className="h-5 w-5 shrink-0 text-green-600" />
+              <Label className="truncate">{uploadedResume.fileName}</Label>
             </div>
-            <div className="max-h-40 overflow-y-auto text-sm text-muted-foreground font-mono whitespace-pre-wrap text-left">
-              {previewText}
-            </div>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              onClick={handleRemove}
+              aria-label="Remove uploaded resume"
+            >
+              <AlertCircle className="h-4 w-4" />
+            </Button>
           </div>
         )}
-
-        <textarea
-          id="resume-text-hidden"
-          className="hidden"
-          value={resumeText}
-          onChange={() => {}}
-          readOnly
-        />
       </CardContent>
     </Card>
   );

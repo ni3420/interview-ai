@@ -16,7 +16,7 @@ import { toast } from "sonner";
 interface Interview {
   _id: string;
   userId: string;
-  resumeText: string;
+  resumeText?: string;
   jobDescription: string;
   status: "setup" | "in_progress" | "completed" | "failed";
   plan?: { questions: string[] } | null;
@@ -111,7 +111,7 @@ export default function InterviewReportPage() {
         .map((a: InterviewAnswer) => ({ question: a.question, answer: a.answer }));
 
       const evaluation = await evaluateInterview({
-        resume_text: interview.resumeText,
+        resume_text: interview.resumeText ?? "",
         job_description: interview.jobDescription,
         qa_pairs: qaPairs,
       });

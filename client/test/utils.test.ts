@@ -5,31 +5,31 @@ import { cn } from "@/lib/utils";
 
 describe("Interview Setup Validation", () => {
   describe("interviewSetupSchema", () => {
-    it("passes with valid resume and job description", () => {
+    it("passes with an uploaded resume and valid job description", () => {
       const result = interviewSetupSchema.safeParse({
-        resumeText: "Software engineer with 5 years experience in React, Node.js, TypeScript. Built scalable web applications. Led team of 4 developers.",
+        resumeId: "resumes_123",
         jobDescription: "Senior Frontend Engineer role. Requirements: React, TypeScript, Next.js, GraphQL, 5+ years experience. Responsible for building user-facing features.",
       });
 
       expect(result.success).toBe(true);
     });
 
-    it("fails when resume text is too short", () => {
+    it("fails when no resume is uploaded", () => {
       const result = interviewSetupSchema.safeParse({
-        resumeText: "short",
+        resumeId: "",
         jobDescription: "Valid job description with enough content to pass validation",
       });
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.errors[0].path).toContain("resumeText");
-        expect(result.error.errors[0].message).toContain("too short");
+        expect(result.error.errors[0].path).toContain("resumeId");
+        expect(result.error.errors[0].message).toContain("upload your resume");
       }
     });
 
     it("fails when job description is too short", () => {
       const result = interviewSetupSchema.safeParse({
-        resumeText: "Valid resume with enough content to pass the minimum length requirement",
+        resumeId: "resumes_123",
         jobDescription: "short",
       });
 
@@ -41,9 +41,9 @@ describe("Interview Setup Validation", () => {
       }
     });
 
-    it("fails when both fields are too short", () => {
+    it("fails when both fields are invalid", () => {
       const result = interviewSetupSchema.safeParse({
-        resumeText: "short",
+        resumeId: "",
         jobDescription: "short",
       });
 

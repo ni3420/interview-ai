@@ -4,7 +4,8 @@ import { requireAuthUserId } from "./auth";
 
 export const createInterview = mutation({
   args: {
-    resumeText: v.string(),
+    resumeId: v.optional(v.id("resumes")),
+    resumeText: v.optional(v.string()),
     jobDescription: v.string(),
   },
   handler: async (ctx, args) => {
@@ -13,7 +14,8 @@ export const createInterview = mutation({
 
     return await ctx.db.insert("interviews", {
       userId,
-      resumeText: args.resumeText,
+      resumeId: args.resumeId,
+      resumeText: args.resumeText ?? "",
       jobDescription: args.jobDescription,
       status: "setup",
       currentQuestionIndex: 0,
