@@ -59,7 +59,7 @@ export default function InterviewSetupPage() {
         jobDescription,
       });
       toast.success("Interview created!");
-      router.push(`/interview/${interviewId}`);
+      router.push(`/interview/${interviewId}/lobby`);
     } catch (error) {
       console.error(error);
       toast.error("Failed to create interview. Please try again.");

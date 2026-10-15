@@ -198,8 +198,16 @@ export default function DashboardPage() {
 
                       <div className="flex items-center justify-between border-t pt-2">
                         <Button variant="outline" size="sm" asChild>
-                          <Link href={`/interview/${interview._id}`}>
-                            Continue
+                          <Link
+                            href={
+                              interview.status === "setup"
+                                ? `/interview/${interview._id}/lobby`
+                                : `/interview/${interview._id}`
+                            }
+                          >
+                            {interview.status === "setup"
+                              ? "Enter Lobby"
+                              : "Continue"}
                           </Link>
                         </Button>
 
