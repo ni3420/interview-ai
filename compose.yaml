@@ -1,0 +1,78 @@
+name: interview-ai
+
+# Local development stack:
+#   - Qdrant  : vector store for resume chunks + embeddings (used by ai-service)
+#   - Valkey  : Redis-compatible BullMQ backend (resume-processing queue)
+#   - ai-service : Python/FastAPI service (LangChain + Ollama embeddings -> Qdrant)
+#   - worker  : Node BullMQ consumer that drives resume processing
+#
+# Quick start:  docker compose up -d qdrant valkey
+# Full stack:   docker compose up --build
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.19.2
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey_data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ai-service:
+    build:
+      context: ./apps/ai-service
+    restart: unless-stopped
+    env_file:
+      - path: ./apps/ai-service/.env
+        required: false
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-secret-key}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-resume_chunks}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+    # Lets the container reach Ollama running on the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://valkey:6379
+      AI_SERVICE_URL: http://ai-service:8000
+      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-secret-key}
+      CONVEX_SITE_URL: ${CONVEX_SITE_URL:-}
+      WORKER_SERVICE_KEY: ${WORKER_SERVICE_KEY:-}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    depends_on:
+      valkey:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+
+volumes:
+  qdrant_data:
+  valkey_data:

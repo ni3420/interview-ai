@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@clerk/nextjs": "^5.7.0",
+    "@clerk/nextjs": "^6.39.7",
     "@hookform/resolvers": "^3.9.0",
     "@sentry/nextjs": "^11.7.0",
     "@stream-io/node-sdk": "^0.8.12",

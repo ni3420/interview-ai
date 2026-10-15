@@ -1,0 +1,36 @@
+# Build context is the repository root; only worker/ is used.
+
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/.next/
+**/out/
+
+# Python service (built from its own context)
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+apps/ai-service/tests/
+apps/ai-service/.env
+apps/ai-service/.env.*
+
+# Other workspaces not needed by the worker image
+client/
+convex/
+
+# Secrets and local overrides
+.env
+.env.*
+!**/.env.example
+
+# VCS / editor / docs
+.git/
+.gitignore
+docs/
+**/*.md
+**/*.log
+.idea/
+.vscode/
