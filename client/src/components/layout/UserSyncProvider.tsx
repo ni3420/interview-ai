@@ -38,6 +38,7 @@ export default function UserSyncProvider({
 
     // 2. Agar Clerk load ho chuka hai, tab check karo ki sach mein user signed out hai kya
     if (!isSignedIn || !user) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing derived auth status with external Clerk state
       setStatus("error");
       router.push("/sign-in");
       return;

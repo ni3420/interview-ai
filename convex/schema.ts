@@ -40,10 +40,6 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_interview", ["interviewId"]),
 
-  messages: defineTable({
-     author: v.string(), content: v.string(), })
-     .index("by_author", ["author"]),
-
   reports: defineTable({
     interviewId: v.id("interviews"),
     userId: v.id("users"),

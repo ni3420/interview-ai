@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
-gemini_api=os.getenv("GEMINI_API_KEY")
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -15,7 +14,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    gemini_api_key: str = gemini_api
+    gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
     gemini_temperature: float = 0.7
     gemini_max_tokens: int = 2048

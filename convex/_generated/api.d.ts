@@ -11,7 +11,6 @@
 import type * as answers from "../answers.js";
 import type * as auth from "../auth.js";
 import type * as interviews from "../interviews.js";
-import type * as message from "../message.js";
 import type * as reports from "../reports.js";
 import type * as users from "../users.js";
 
@@ -25,7 +24,6 @@ declare const fullApi: ApiFromModules<{
   answers: typeof answers;
   auth: typeof auth;
   interviews: typeof interviews;
-  message: typeof message;
   reports: typeof reports;
   users: typeof users;
 }>;

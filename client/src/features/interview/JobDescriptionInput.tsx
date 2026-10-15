@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, CheckCircle, AlertCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CheckCircle, AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 interface JobDescriptionInputProps {
@@ -31,7 +29,7 @@ export function JobDescriptionInput({ value, onChange, error }: JobDescriptionIn
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Job Description</CardTitle>
-            <CardDescription>Paste the job description for the role you're interviewing for</CardDescription>
+            <CardDescription>Paste the job description for the role you&apos;re interviewing for</CardDescription>
           </div>
           {isValid && (
             <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">

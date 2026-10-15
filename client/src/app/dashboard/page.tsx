@@ -31,7 +31,7 @@ interface Interview {
   resumeText: string;
   jobDescription: string;
   status: "setup" | "in_progress" | "completed" | "failed";
-  plan?: any;
+  plan?: { questions?: string[]; focus_areas?: string[] } | null;
   currentQuestionIndex: number;
   startedAt?: number;
   completedAt?: number;

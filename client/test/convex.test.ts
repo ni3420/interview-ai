@@ -5,9 +5,34 @@ vi.mock("../../convex/auth", () => ({
   requireAuthUserId: vi.fn().mockResolvedValue(mockAuthUserId),
 }));
 
-import { createInterview, getInterviews, getInterview, updateInterviewStatus, saveInterviewPlan } from "../../convex/interviews";
-import { saveAnswer, getAnswers, incrementQuestionIndex } from "../../convex/answers";
-import { saveReport, getReport, getUserReports } from "../../convex/reports";
+import * as Interviews from "../../convex/interviews";
+import * as Answers from "../../convex/answers";
+import * as Reports from "../../convex/reports";
+
+// Convex `mutation()`/`query()` exports are registration descriptors, not
+// callable functions. Their raw handler is exposed as `_handler`, which we
+// invoke directly with a mocked context in these unit tests.
+const unwrap = <R,>(ref: unknown) =>
+  (ref as unknown as { _handler: (ctx: unknown, args?: unknown) => R })
+    ._handler;
+
+const createInterview = unwrap<Promise<unknown>>(Interviews.createInterview);
+const getInterviews = unwrap<Promise<unknown>>(Interviews.getInterviews);
+const getInterview = unwrap<Promise<unknown>>(Interviews.getInterview);
+const updateInterviewStatus = unwrap<Promise<unknown>>(
+  Interviews.updateInterviewStatus
+);
+const saveInterviewPlan = unwrap<Promise<unknown>>(Interviews.saveInterviewPlan);
+
+const saveAnswer = unwrap<Promise<unknown>>(Answers.saveAnswer);
+const getAnswers = unwrap<Promise<unknown>>(Answers.getAnswers);
+const incrementQuestionIndex = unwrap<Promise<unknown>>(
+  Answers.incrementQuestionIndex
+);
+
+const saveReport = unwrap<Promise<unknown>>(Reports.saveReport);
+const getReport = unwrap<Promise<unknown>>(Reports.getReport);
+const getUserReports = unwrap<Promise<unknown>>(Reports.getUserReports);
 
 describe("Convex - Interviews", () => {
   let mockCtx: ReturnType<typeof createMockCtx>;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ArrowLeft, CheckCircle, AlertCircle, Lightbulb, Award, TrendingUp, Loader2, RefreshCw } from "lucide-react";
@@ -75,7 +75,6 @@ function getScoreIcon(score: number) {
 
 export default function InterviewReportPage() {
   const params = useParams();
-  const router = useRouter();
   const interviewId = params.id as string;
 
   const interview = useQuery(api.interviews.getInterview, { interviewId }) as Interview | undefined;
@@ -93,6 +92,7 @@ export default function InterviewReportPage() {
   // Sync existing report when loaded from database
   useEffect(() => {
     if (existingReport) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- adopting the persisted report from the Convex query
       setReport(existingReport);
       setIsGenerating(false);
     }
@@ -395,8 +395,4 @@ export default function InterviewReportPage() {
       </main>
     </div>
   );
-}
-
-function cn(...classes: Array<string | boolean | undefined | null>) {
-  return classes.filter(Boolean).join(" ");
 }

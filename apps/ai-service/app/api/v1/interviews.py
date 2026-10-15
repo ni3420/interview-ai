@@ -60,7 +60,7 @@ async def generate_interview_plan(request: InterviewPlanRequest):
         )
     except Exception as e:
         logging.error("Failed to generate plan", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to generate plan: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate plan")
         
 
 
@@ -93,7 +93,7 @@ async def generate_next_question(request: NextQuestionRequest):
         )
     except Exception as e:
         logging.error("Failed to generate question", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to generate question: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate question")
 
 
 @router.post(
@@ -127,4 +127,4 @@ async def evaluate_interview(request: EvaluationRequest):
         )
     except Exception as e:
         logging.error("Failed to evaluate interview", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to evaluate interview: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to evaluate interview")

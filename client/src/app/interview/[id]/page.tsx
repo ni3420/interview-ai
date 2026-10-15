@@ -99,6 +99,7 @@ export default function InterviewPage() {
         }
       }
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- deriving chat transcript from Convex query data
       setMessages(initialMessages);
     }
   }, [interview, answers]);
@@ -230,7 +231,7 @@ export default function InterviewPage() {
       }
       
       toast.success("Question skipped");
-    } catch (error) {
+    } catch {
       toast.error("Failed to skip");
     } finally {
       setIsSubmitting(false);
@@ -243,7 +244,7 @@ export default function InterviewPage() {
       await updateStatus({ interviewId, status: "completed" });
       toast.success("Interview completed! Generating report...");
       router.push(`/interview/${interviewId}/report`);
-    } catch (error) {
+    } catch {
       toast.error("Failed to finish interview");
     } finally {
       setIsSubmitting(false);
