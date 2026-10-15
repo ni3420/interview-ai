@@ -13,6 +13,13 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "httpx>=0.27.0",
     "tenacity>=8.2.0",
+    # Resume processing: PDF text extraction, chunking and vector retrieval.
+    "pypdf>=5.1.0",
+    "langchain-core>=0.3.20",
+    "langchain-ollama>=0.2.0",
+    "langchain-qdrant>=0.2.0",
+    "langchain-text-splitters>=0.3.2",
+    "qdrant-client>=1.12.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +35,11 @@ dev = [
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: requires real local services (Qdrant and Ollama)",
+]
 
 [tool.ruff]
 line-length = 100

@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Security
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.interview import (
     InterviewPlanRequest,
     InterviewPlanResponse,
@@ -10,6 +9,7 @@ from app.schemas.interview import (
     QuestionScore,
     ErrorResponse,
 )
+from app.api.deps import verify_api_key
 from app.ai.providers.gemini import gemini_provider
 from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
 from app.core.config import settings
@@ -19,14 +19,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 router = APIRouter()
-
-api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
-
-
-async def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key != settings.service_api_key:
-        raise HTTPException(status_code=401, detail="Invalid API key")
-    return api_key
 
 
 def parse_json_response(response: str) -> dict:
