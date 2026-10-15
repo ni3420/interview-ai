@@ -61,7 +61,9 @@ function VideoPlaceholder({ state }: { state: SessionState }) {
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             Connecting to the interview room...
+
           </p>
+          <h1>hshshdhdh</h1>
         </>
       ) : state.status === "unconfigured" ? (
         <>
