@@ -8,6 +8,7 @@ vi.mock("../../convex/auth", () => ({
 import * as Interviews from "../../convex/interviews";
 import * as Answers from "../../convex/answers";
 import * as Reports from "../../convex/reports";
+import * as Resume from "../../convex/resume";
 
 // Convex `mutation()`/`query()` exports are registration descriptors, not
 // callable functions. Their raw handler is exposed as `_handler`, which we
@@ -33,6 +34,11 @@ const incrementQuestionIndex = unwrap<Promise<unknown>>(
 const saveReport = unwrap<Promise<unknown>>(Reports.saveReport);
 const getReport = unwrap<Promise<unknown>>(Reports.getReport);
 const getUserReports = unwrap<Promise<unknown>>(Reports.getUserReports);
+
+const getProcessingContext = unwrap<Promise<unknown>>(
+  Resume.getProcessingContext
+);
+const markResumeStatus = unwrap<Promise<unknown>>(Resume.markResumeStatus);
 
 describe("Convex - Interviews", () => {
   let mockCtx: ReturnType<typeof createMockCtx>;
@@ -358,6 +364,110 @@ describe("Convex - Reports", () => {
       const result = await getUserReports(mockCtx);
 
       expect(result).toEqual([mockReport]);
+    });
+  });
+});
+
+describe("Convex - Resume processing", () => {
+  const interviewWithResume = { ...mockInterview, resumeId: "resume-1" };
+
+  const mockResume = {
+    _id: "resume-1",
+    userId: mockAuthUserId,
+    storageId: "storage-1",
+    fileName: "resume.pdf",
+    contentType: "application/pdf",
+    size: 1234,
+    status: "uploaded" as const,
+    uploadedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  let mockCtx: ReturnType<typeof createMockCtx> & {
+    storage: { getUrl: ReturnType<typeof vi.fn> };
+  };
+
+  beforeEach(() => {
+    mockCtx = {
+      ...createMockCtx(),
+      storage: { getUrl: vi.fn() },
+    };
+    vi.clearAllMocks();
+    mockCtx.storage.getUrl.mockResolvedValue("https://files.example/resume-1");
+  });
+
+  describe("getProcessingContext", () => {
+    it("returns the resume context for the owner", async () => {
+      mockCtx.db.get
+        .mockResolvedValueOnce(interviewWithResume)
+        .mockResolvedValueOnce(mockResume);
+
+      const result = await getProcessingContext(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({
+        resumeId: "resume-1",
+        userId: mockAuthUserId,
+        fileUrl: "https://files.example/resume-1",
+        interviewId: "interview-1",
+        jobDescription: "Test JD",
+      });
+    });
+
+    it("returns null when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...interviewWithResume,
+        userId: "other-user",
+      });
+
+      const result = await getProcessingContext(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toBeNull();
+    });
+
+    it("returns null when no resume is attached", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...mockInterview,
+        resumeId: undefined,
+      });
+
+      const result = await getProcessingContext(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("markResumeStatus", () => {
+    it("patches status for the owner", async () => {
+      mockCtx.db.get.mockResolvedValueOnce(mockResume);
+      mockCtx.db.patch.mockResolvedValue(undefined);
+
+      const result = await markResumeStatus(mockCtx, {
+        resumeId: "resume-1",
+        status: "ready",
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "resume-1",
+        expect.objectContaining({ status: "ready" })
+      );
+    });
+
+    it("throws when the caller does not own the resume", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...mockResume,
+        userId: "other-user",
+      });
+
+      await expect(
+        markResumeStatus(mockCtx, { resumeId: "resume-1", status: "ready" })
+      ).rejects.toThrow("Not found");
     });
   });
 });

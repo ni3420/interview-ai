@@ -35,6 +35,8 @@ export const api = {
     generateUploadUrl: asMutationRef("resume:generateUploadUrl"),
     saveResume: asMutationRef("resume:saveResume"),
     getMyResume: asQueryRef("resume:getMyResume"),
+    getProcessingContext: asQueryRef("resume:getProcessingContext"),
+    markResumeStatus: asMutationRef("resume:markResumeStatus"),
     deleteResume: asMutationRef("resume:deleteResume"),
   },
 };

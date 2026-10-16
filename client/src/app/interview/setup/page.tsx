@@ -58,6 +58,19 @@ export default function InterviewSetupPage() {
         resumeId: resume.resumeId,
         jobDescription,
       });
+
+      // Extract, chunk, embed and index the resume into Qdrant. A failure here
+      // must not block reaching the lobby, where the status is shown.
+      try {
+        await fetch("/api/resume/process", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ interviewId }),
+        });
+      } catch (processingError) {
+        console.error("Resume processing could not be started:", processingError);
+      }
+
       toast.success("Interview created!");
       router.push(`/interview/${interviewId}/lobby`);
     } catch (error) {

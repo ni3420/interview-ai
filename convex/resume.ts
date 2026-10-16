@@ -69,6 +69,59 @@ export const getMyResume = query({
   },
 });
 
+// Resolves everything the server needs to process an interview's resume:
+// the caller must own both the interview and its resume. The storage URL is
+// only ever returned to authorized server code, never trusted from the client.
+export const getProcessingContext = query({
+  args: { interviewId: v.id("interviews") },
+  handler: async (ctx, args) => {
+    const userId = await requireAuthUserId(ctx);
+
+    const interview = await ctx.db.get(args.interviewId);
+    if (!interview || interview.userId !== userId) return null;
+    if (!interview.resumeId) return null;
+
+    const resume = await ctx.db.get(interview.resumeId);
+    if (!resume || resume.userId !== userId) return null;
+
+    const fileUrl = await ctx.storage.getUrl(resume.storageId);
+    if (!fileUrl) return null;
+
+    return {
+      resumeId: resume._id,
+      userId,
+      fileUrl,
+      interviewId: interview._id,
+      jobDescription: interview.jobDescription,
+    };
+  },
+});
+
+// Tracks resume-processing status for the lobby checklist. Ownership is derived
+// from the verified identity, so one user can never change another's resume.
+export const markResumeStatus = mutation({
+  args: {
+    resumeId: v.id("resumes"),
+    status: v.union(
+      v.literal("uploaded"),
+      v.literal("processing"),
+      v.literal("ready"),
+      v.literal("failed")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireAuthUserId(ctx);
+    const resume = await ctx.db.get(args.resumeId);
+    if (!resume || resume.userId !== userId) throw new Error("Not found");
+
+    await ctx.db.patch(args.resumeId, {
+      status: args.status,
+      updatedAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
 export const deleteResume = mutation({
   args: { resumeId: v.id("resumes") },
   handler: async (ctx, args) => {

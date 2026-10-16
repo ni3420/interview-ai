@@ -60,9 +60,9 @@ export default function InterviewLobbyPage() {
     );
   }
 
-  const hasQuestions =
-    (interview.plan?.questions?.length ?? 0) > 0 ||
-    resume?.status === "ready";
+  // The interview can only start once questions exist. A processed resume on
+  // its own is not enough, since the live interview needs a question plan.
+  const hasQuestions = (interview.plan?.questions?.length ?? 0) > 0;
 
   const handleStart = async () => {
     setIsStarting(true);

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import dynamic from "next/dynamic";
-import { AlertCircle, Bot, Loader2, Video } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Bot, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,14 +10,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DevicePreview } from "./device-preview";
 import { ProcessingChecklist, type ResumeStatus } from "./processing-checklist";
-import type { LobbySession } from "./lobby-video";
-
-// The GetStream SDK touches browser APIs, so the video layer is client-only.
-const LobbyVideo = dynamic(() => import("./lobby-video"), {
-  ssr: false,
-  loading: () => <VideoPlaceholder state={{ status: "loading" }} />,
-});
 
 interface InterviewLobbyProps {
   interviewId: string;
@@ -33,7 +26,7 @@ type SessionState =
   | { status: "loading" }
   | { status: "unconfigured" }
   | { status: "error"; message: string }
-  | { status: "ready"; session: LobbySession };
+  | { status: "ready" };
 
 function AiInterviewerTile() {
   return (
@@ -53,40 +46,13 @@ function AiInterviewerTile() {
   );
 }
 
-function VideoPlaceholder({ state }: { state: SessionState }) {
-  return (
-    <div className="flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-lg border bg-muted text-center">
-      {state.status === "loading" ? (
-        <>
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            Connecting to the interview room...
-
-          </p>
-          <h1>hshshdhdh</h1>
-        </>
-      ) : state.status === "unconfigured" ? (
-        <>
-          <Video className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Video is not configured</p>
-          <p className="max-w-xs text-xs text-muted-foreground">
-            Add STREAM_API_KEY and STREAM_API_SECRET to enable the live interview
-            room.
-          </p>
-        </>
-      ) : state.status === "error" ? (
-        <>
-          <AlertCircle className="h-8 w-8 text-destructive" />
-          <p className="text-sm font-medium">Could not start video</p>
-          <p className="max-w-xs text-xs text-muted-foreground">
-            {state.message}
-          </p>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
+/**
+ * Pre-interview preparation lobby.
+ *
+ * Always shows a local camera/microphone check so candidates can confirm their
+ * setup before joining. The live interview room is only connected as part of
+ * the start flow (see the start button), never automatically.
+ */
 export function InterviewLobby({
   interviewId,
   jobDescription,
@@ -96,6 +62,7 @@ export function InterviewLobby({
   isStarting,
 }: InterviewLobbyProps) {
   const [state, setState] = useState<SessionState>({ status: "loading" });
+  const [devicesReady, setDevicesReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,8 +95,8 @@ export function InterviewLobby({
           return;
         }
 
-        const session = (await response.json()) as LobbySession;
-        if (!cancelled) setState({ status: "ready", session });
+        await response.json();
+        if (!cancelled) setState({ status: "ready" });
       } catch (error) {
         console.error("Failed to fetch the lobby session", error);
         if (!cancelled) {
@@ -147,6 +114,12 @@ export function InterviewLobby({
     };
   }, [interviewId]);
 
+  const handleReadyChange = useCallback((ready: boolean) => {
+    setDevicesReady(ready);
+  }, []);
+
+  const canStart = isReady && devicesReady && !isStarting;
+
   return (
     <div className="space-y-6">
       <div>
@@ -154,16 +127,24 @@ export function InterviewLobby({
           Interview Lobby
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Prepare yourself. We&apos;ll start as soon as your interview is ready.
+          Check your camera and microphone. We&apos;ll start as soon as your
+          interview is ready.
         </p>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         <div className="space-y-4">
-          {state.status === "ready" ? (
-            <LobbyVideo session={state.session} />
-          ) : (
-            <VideoPlaceholder state={state} />
+          <DevicePreview onReadyChange={handleReadyChange} />
+
+          {state.status === "unconfigured" && (
+            <p className="text-xs text-muted-foreground">
+              The live interview room is not configured yet. You can still check
+              your camera and microphone above.
+            </p>
+          )}
+
+          {state.status === "error" && (
+            <p className="text-xs text-destructive">{state.message}</p>
           )}
 
           <AiInterviewerTile />
@@ -191,7 +172,7 @@ export function InterviewLobby({
                 className="w-full"
                 size="lg"
                 onClick={onStart}
-                disabled={!isReady || isStarting}
+                disabled={!canStart}
               >
                 {isStarting ? (
                   <>
@@ -204,7 +185,12 @@ export function InterviewLobby({
               </Button>
               {!isReady && (
                 <p className="text-center text-xs text-muted-foreground">
-                  Available once your resume has been processed.
+                  Available once your interview questions are ready.
+                </p>
+              )}
+              {isReady && !devicesReady && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Check your camera and microphone to continue.
                 </p>
               )}
             </div>
@@ -214,3 +200,5 @@ export function InterviewLobby({
     </div>
   );
 }
+
+export default InterviewLobby;
