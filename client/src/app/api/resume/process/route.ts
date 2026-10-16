@@ -2,21 +2,14 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
+import { buildResumeJob, getResumeQueue } from "@/lib/resume-queue";
 
-// Convex and the AI service SDKs need the Node.js runtime.
+// Convex and the queue client need the Node.js runtime.
 export const runtime = "nodejs";
-
-const AI_SERVICE_URL = (process.env.AI_SERVICE_URL ?? "http://localhost:8000").replace(
-  /\/$/,
-  ""
-);
-const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY;
 
 // When the AI service runs in a container, it cannot reach a Convex URL that
 // points at the host loopback. Set RESUME_FETCH_HOST (e.g. "host.docker.internal")
-// to rewrite the file URL host before handing it to the service.
-const PROCESS_TIMEOUT_MS = 120_000;
-
+// to rewrite the file URL host before handing it to the worker.
 function toServiceReachableUrl(rawUrl: string): string {
   const host = process.env.RESUME_FETCH_HOST;
   if (!host) return rawUrl;
@@ -30,12 +23,13 @@ function toServiceReachableUrl(rawUrl: string): string {
 }
 
 /**
- * Kicks off resume processing for an interview.
+ * Enqueues resume processing for an interview.
  *
- * The authenticated owner's resume PDF is extracted, chunked, embedded (Ollama)
- * and indexed into Qdrant by the Python AI service. Ownership is enforced in
- * Convex before any file URL is resolved, and the resume status is moved
- * through processing → ready/failed so the lobby reflects real progress.
+ * Ownership is enforced in Convex before any work is scheduled. The job is
+ * pushed onto the BullMQ `resume-processing` queue where the worker extracts,
+ * chunks, embeds (Ollama), indexes into Qdrant, generates a resume-grounded
+ * interview plan and persists the result back to Convex. The lobby observes
+ * progress through Convex rather than waiting on this request.
  */
 export async function POST(request: NextRequest) {
   const { userId, getToken } = await auth();
@@ -45,17 +39,7 @@ export async function POST(request: NextRequest) {
 
   const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL;
   if (!convexUrl) {
-    return NextResponse.json(
-      { error: "Convex is not configured" },
-      { status: 503 }
-    );
-  }
-
-  if (!AI_SERVICE_API_KEY) {
-    return NextResponse.json(
-      { error: "ai_service_not_configured" },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: "Convex is not configured" }, { status: 503 });
   }
 
   let interviewId: unknown;
@@ -66,10 +50,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (typeof interviewId !== "string" || interviewId.length === 0) {
-    return NextResponse.json(
-      { error: "interviewId is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "interviewId is required" }, { status: 400 });
   }
 
   const convexToken = await getToken({ template: "convex" });
@@ -94,52 +75,24 @@ export async function POST(request: NextRequest) {
   });
 
   try {
-    const response = await fetch(`${AI_SERVICE_URL}/v1/resumes/process`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-API-Key": AI_SERVICE_API_KEY,
-      },
-      body: JSON.stringify({
-        resume_id: context.resumeId,
-        user_id: context.userId,
-        file_url: toServiceReachableUrl(context.fileUrl),
-      }),
-      signal: AbortSignal.timeout(PROCESS_TIMEOUT_MS),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => "");
-      console.error(
-        "Resume processing failed",
-        response.status,
-        detail.slice(0, 200)
-      );
-      await convex.mutation(api.resume.markResumeStatus, {
-        resumeId: context.resumeId,
-        status: "failed",
-      });
-      return NextResponse.json({ error: "processing_failed" }, { status: 502 });
-    }
-
-    const result = (await response.json()) as { chunk_count?: number };
-    await convex.mutation(api.resume.markResumeStatus, {
-      resumeId: context.resumeId,
-      status: "ready",
-    });
-
-    return NextResponse.json({
-      status: "ready",
-      chunkCount: result.chunk_count ?? 0,
+    const queue = getResumeQueue();
+    const job = buildResumeJob(context, toServiceReachableUrl(context.fileUrl));
+    // A stable, colon-free job id makes re-submitting the same resume for the
+    // same interview idempotent while a job is pending or active. (BullMQ
+    // rejects custom ids containing ":".)
+    await queue.add("process-resume", job, {
+      jobId: `${context.interviewId}-${context.resumeId}`,
     });
   } catch (error) {
-    console.error("Resume processing request failed", error);
+    console.error("Failed to enqueue resume processing", error);
     await convex
       .mutation(api.resume.markResumeStatus, {
         resumeId: context.resumeId,
         status: "failed",
       })
       .catch(() => {});
-    return NextResponse.json({ error: "processing_failed" }, { status: 502 });
+    return NextResponse.json({ error: "enqueue_failed" }, { status: 502 });
   }
+
+  return NextResponse.json({ status: "processing" }, { status: 202 });
 }

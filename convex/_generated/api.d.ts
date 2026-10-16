@@ -10,10 +10,12 @@
 
 import type * as answers from "../answers.js";
 import type * as auth from "../auth.js";
+import type * as http from "../http.js";
 import type * as interviews from "../interviews.js";
 import type * as reports from "../reports.js";
 import type * as resume from "../resume.js";
 import type * as users from "../users.js";
+import type * as worker from "../worker.js";
 
 import type {
   ApiFromModules,
@@ -24,10 +26,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   answers: typeof answers;
   auth: typeof auth;
+  http: typeof http;
   interviews: typeof interviews;
   reports: typeof reports;
   resume: typeof resume;
   users: typeof users;
+  worker: typeof worker;
 }>;
 
 /**

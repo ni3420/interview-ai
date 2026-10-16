@@ -1,0 +1,44 @@
+import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+from app.core.config import settings
+
+
+class OllamaProvider:
+    """Local model inference through Ollama.
+
+    Kept behind the same ``generate(prompt) -> str`` interface as the Gemini
+    provider so business logic never depends on a specific model. Ollama is
+    only contacted when this provider is actually invoked.
+    """
+
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(3),
+    )
+    async def generate(self, prompt: str) -> str:
+        async with httpx.AsyncClient(
+            base_url=settings.ollama_base_url, timeout=settings.ollama_timeout_seconds
+        ) as client:
+            response = await client.post(
+                "/api/generate",
+                json={
+                    "model": settings.ollama_model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": settings.ollama_temperature,
+                        "num_predict": settings.ollama_max_tokens,
+                    },
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        text = (data.get("response") or "").strip()
+        if not text:
+            raise ValueError("Empty response from Ollama")
+        return text
+
+
+ollama_provider = OllamaProvider()

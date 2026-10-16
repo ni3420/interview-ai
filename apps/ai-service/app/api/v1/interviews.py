@@ -10,7 +10,7 @@ from app.schemas.interview import (
     ErrorResponse,
 )
 from app.api.deps import verify_api_key
-from app.ai.providers.gemini import gemini_provider
+from app.ai.providers.factory import get_llm_provider
 from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
 from app.core.config import settings
 import json
@@ -44,7 +44,7 @@ async def generate_interview_plan(request: InterviewPlanRequest):
         job_description=request.job_description,
     )
     try:
-        response = await gemini_provider.generate(prompt)
+        response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
         return InterviewPlanResponse(
             questions=data.get("questions", []),
@@ -76,7 +76,7 @@ async def generate_next_question(request: NextQuestionRequest):
         previous_qa=previous_qa_str,
     )
     try:
-        response = await gemini_provider.generate(prompt)
+        response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
         return NextQuestionResponse(
             question=data.get("question", ""),
@@ -106,7 +106,7 @@ async def evaluate_interview(request: EvaluationRequest):
         qa_pairs=qa_pairs_str,
     )
     try:
-        response = await gemini_provider.generate(prompt)
+        response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
         return EvaluationResponse(
             overall_score=data.get("overall_score", 0),

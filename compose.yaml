@@ -47,6 +47,10 @@ services:
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-resume_chunks}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      # Local development uses Ollama (no cloud key required). Set
+      # AI_PROVIDER=gemini plus GEMINI_API_KEY to use the remote provider.
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
     # Lets the container reach Ollama running on the host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -64,9 +68,13 @@ services:
       REDIS_URL: redis://valkey:6379
       AI_SERVICE_URL: http://ai-service:8000
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-secret-key}
-      CONVEX_SITE_URL: ${CONVEX_SITE_URL:-}
+      # The Convex local backend runs on the host; reach it via the gateway.
+      CONVEX_SITE_URL: ${CONVEX_SITE_URL:-http://host.docker.internal:3211}
       WORKER_SERVICE_KEY: ${WORKER_SERVICE_KEY:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+    # Lets the container persist results back to the host's Convex backend.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       valkey:
         condition: service_healthy

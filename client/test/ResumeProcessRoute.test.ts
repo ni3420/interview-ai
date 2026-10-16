@@ -1,14 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
 
 process.env.NEXT_PUBLIC_CONVEX_URL = "http://convex.test";
-process.env.AI_SERVICE_URL = "http://ai.test";
-process.env.AI_SERVICE_API_KEY = "test-key";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   setAuth: vi.fn(),
   query: vi.fn(),
   mutation: vi.fn(),
+  queueAdd: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
@@ -20,6 +19,14 @@ vi.mock("convex/browser", () => ({
     mutation: mocks.mutation,
   })),
 }));
+
+// The route only talks to the queue through this module, so the Redis
+// connection itself is never opened during unit tests. The payload builder is
+// kept real so the contract test also exercises it.
+vi.mock("@/lib/resume-queue", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/resume-queue")>();
+  return { ...actual, getResumeQueue: () => ({ add: mocks.queueAdd }) };
+});
 
 type RouteHandler = (request: unknown) => Promise<Response>;
 
@@ -34,7 +41,7 @@ const context = {
   userId: "user-1",
   fileUrl: "http://convex.test/api/storage/resume-1",
   interviewId: "interview-1",
-  jobDescription: "A sufficiently long job description for testing.",
+  jobDescription: "A sufficiently long job description used for contract testing.",
 };
 
 beforeAll(async () => {
@@ -50,11 +57,12 @@ beforeEach(() => {
   });
   mocks.query.mockResolvedValue(context);
   mocks.mutation.mockResolvedValue({ success: true });
+  mocks.queueAdd.mockResolvedValue({ id: "resume:resume-1" });
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.clearAllMocks();
+  delete process.env.RESUME_FETCH_HOST;
 });
 
 describe("POST /api/resume/process", () => {
@@ -64,11 +72,13 @@ describe("POST /api/resume/process", () => {
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));
 
     expect(response.status).toBe(401);
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
   });
 
   it("requires an interviewId", async () => {
     const response = await POST(jsonRequest({}));
     expect(response.status).toBe(400);
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the caller does not own the interview", async () => {
@@ -77,55 +87,36 @@ describe("POST /api/resume/process", () => {
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));
 
     expect(response.status).toBe(404);
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
   });
 
-  it("indexes the resume and marks it ready", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ chunk_count: 3 }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
+  it("marks the resume processing and enqueues a stable job", async () => {
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      status: "ready",
-      chunkCount: 3,
-    });
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toEqual({ status: "processing" });
 
-    // Sends the resume to the AI service with the service API key.
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe("http://ai.test/v1/resumes/process");
-    expect((init as RequestInit).headers).toMatchObject({
-      "X-API-Key": "test-key",
-    });
-    const payload = JSON.parse((init as RequestInit).body as string);
-    expect(payload).toMatchObject({
-      resume_id: "resume-1",
-      user_id: "user-1",
-    });
-
-    // processing then ready.
-    expect(mocks.mutation).toHaveBeenNthCalledWith(1, expect.anything(), {
+    expect(mocks.mutation).toHaveBeenCalledTimes(1);
+    expect(mocks.mutation).toHaveBeenCalledWith(expect.anything(), {
       resumeId: "resume-1",
       status: "processing",
     });
-    expect(mocks.mutation).toHaveBeenNthCalledWith(2, expect.anything(), {
+
+    // The job payload matches the worker's validated contract.
+    const [name, payload, options] = mocks.queueAdd.mock.calls[0];
+    expect(name).toBe("process-resume");
+    expect(payload).toEqual({
       resumeId: "resume-1",
-      status: "ready",
+      interviewId: "interview-1",
+      userId: "user-1",
+      fileUrl: "http://convex.test/api/storage/resume-1",
+      jobDescription: context.jobDescription,
     });
+    expect(options).toEqual({ jobId: "interview-1-resume-1" });
   });
 
-  it("marks the resume failed when the AI service errors", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 422,
-        text: async () => "unusable",
-      })
-    );
+  it("marks the resume failed when enqueueing fails", async () => {
+    mocks.queueAdd.mockRejectedValueOnce(new Error("redis down"));
 
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));
 
@@ -138,22 +129,13 @@ describe("POST /api/resume/process", () => {
 
   it("rewrites the file host when RESUME_FETCH_HOST is set", async () => {
     process.env.RESUME_FETCH_HOST = "host.docker.internal";
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ chunk_count: 1 }),
-    });
-    vi.stubGlobal("fetch", fetchMock);
 
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));
 
-    // Route reads env at call time for the host rewrite.
-    expect(response.status).toBe(200);
-    const [, init] = fetchMock.mock.calls[0];
-    const payload = JSON.parse((init as RequestInit).body as string);
-    expect(payload.file_url).toBe(
+    expect(response.status).toBe(202);
+    const [, payload] = mocks.queueAdd.mock.calls[0];
+    expect(payload.fileUrl).toBe(
       "http://host.docker.internal/api/storage/resume-1"
     );
-
-    delete process.env.RESUME_FETCH_HOST;
   });
 });

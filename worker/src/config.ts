@@ -30,5 +30,11 @@ export const config = {
   convexSiteUrl: env("CONVEX_SITE_URL").replace(/\/$/, ""),
   workerServiceKey: env("WORKER_SERVICE_KEY"),
 
+  /**
+   * Upper bound for a single AI service call. Local CPU inference can take
+   * several minutes, so this is intentionally generous.
+   */
+  aiRequestTimeoutMs: intEnv("AI_REQUEST_TIMEOUT_MS", 900_000),
+
   workerConcurrency: intEnv("WORKER_CONCURRENCY", 2),
 } as const;

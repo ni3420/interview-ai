@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
+from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 from app.main import app
 from app.schemas.interview import (
@@ -11,6 +12,18 @@ from app.schemas.interview import (
 
 TEST_API_KEY = "dev-secret-key"
 HEADERS = {"X-API-Key": TEST_API_KEY, "Content-Type": "application/json"}
+
+
+@contextmanager
+def patch_llm():
+    """Replace the configured LLM provider with a deterministic AsyncMock.
+
+    The endpoints resolve their provider through ``get_llm_provider`` so tests
+    never depend on a live Gemini or Ollama instance.
+    """
+    provider = AsyncMock()
+    with patch("app.api.v1.interviews.get_llm_provider", return_value=provider):
+        yield provider.generate
 
 SAMPLE_RESUME = "Software engineer with 5 years experience in React, Node.js, TypeScript. Built scalable web applications. Led team of 4 developers."
 SAMPLE_JD = "Senior Frontend Engineer role. Requirements: React, TypeScript, Next.js, GraphQL, 5+ years experience. Responsible for building user-facing features."
@@ -28,7 +41,7 @@ class TestInterviewPlanEndpoint:
             "focus_areas": ["React", "TypeScript", "State Management"],
         }
 
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.return_value = '{"questions": ["Describe a complex React project you\'ve built.", "How do you handle state management in large applications?", "Explain your experience with TypeScript generics."], "focus_areas": ["React", "TypeScript", "State Management"]}'
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -69,7 +82,7 @@ class TestInterviewPlanEndpoint:
 
     @pytest.mark.asyncio
     async def test_generate_plan_gemini_failure(self):
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.side_effect = Exception("Gemini API error")
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -91,7 +104,7 @@ class TestNextQuestionEndpoint:
             "follow_up_count": 1,
         }
 
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.return_value = '{"question": "Can you elaborate on the specific React hooks you used?", "is_follow_up": true, "follow_up_count": 1}'
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -122,7 +135,7 @@ class TestNextQuestionEndpoint:
             "follow_up_count": 0,
         }
 
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.return_value = '{"question": "How do you handle state management in large applications?", "is_follow_up": false, "follow_up_count": 0}'
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -146,7 +159,7 @@ class TestNextQuestionEndpoint:
 
     @pytest.mark.asyncio
     async def test_next_question_max_follow_ups(self):
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.return_value = '{"question": "Next topic question", "is_follow_up": false, "follow_up_count": 0}'
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -181,7 +194,7 @@ class TestEvaluationEndpoint:
             ],
         }
 
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.return_value = str(mock_response).replace("'", '"')
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -242,7 +255,7 @@ class TestEvaluationEndpoint:
 
     @pytest.mark.asyncio
     async def test_evaluate_interview_gemini_failure(self):
-        with patch("app.api.v1.interviews.gemini_provider.generate", new_callable=AsyncMock) as mock_generate:
+        with patch_llm() as mock_generate:
             mock_generate.side_effect = Exception("Gemini API error")
 
             async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     gemini_temperature: float = 0.7
     gemini_max_tokens: int = 2048
 
+    # Model provider selection. "gemini" is the optional remote provider;
+    # "ollama" uses local inference so the service works without cloud keys.
+    ai_provider: str = "gemini"
+    ollama_model: str = "llama3.2:1b"
+    ollama_temperature: float = 0.7
+    # Bound generation so slow local CPU inference still completes in time.
+    # Local CPU inference can take minutes; the HTTP timeout must exceed it.
+    ollama_max_tokens: int = 512
+    ollama_timeout_seconds: float = 900.0
+
     service_api_key: str = "dev-secret-key"
 
     cors_origins: list[str] = ["http://localhost:3000"]

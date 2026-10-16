@@ -9,6 +9,7 @@ import * as Interviews from "../../convex/interviews";
 import * as Answers from "../../convex/answers";
 import * as Reports from "../../convex/reports";
 import * as Resume from "../../convex/resume";
+import * as Worker from "../../convex/worker";
 
 // Convex `mutation()`/`query()` exports are registration descriptors, not
 // callable functions. Their raw handler is exposed as `_handler`, which we
@@ -39,6 +40,13 @@ const getProcessingContext = unwrap<Promise<unknown>>(
   Resume.getProcessingContext
 );
 const markResumeStatus = unwrap<Promise<unknown>>(Resume.markResumeStatus);
+
+const completeResumeProcessing = unwrap<Promise<unknown>>(
+  Worker.completeResumeProcessing
+);
+const failResumeProcessing = unwrap<Promise<unknown>>(
+  Worker.failResumeProcessing
+);
 
 describe("Convex - Interviews", () => {
   let mockCtx: ReturnType<typeof createMockCtx>;
@@ -468,6 +476,111 @@ describe("Convex - Resume processing", () => {
       await expect(
         markResumeStatus(mockCtx, { resumeId: "resume-1", status: "ready" })
       ).rejects.toThrow("Not found");
+    });
+  });
+});
+
+describe("Convex - Worker persistence", () => {
+  const resume = {
+    _id: "resume-1",
+    userId: mockAuthUserId,
+    storageId: "storage-1",
+    fileName: "resume.pdf",
+    contentType: "application/pdf",
+    size: 1234,
+    status: "processing" as const,
+    uploadedAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  let mockCtx: ReturnType<typeof createMockCtx>;
+
+  beforeEach(() => {
+    mockCtx = createMockCtx();
+    vi.clearAllMocks();
+    mockCtx.db.patch.mockResolvedValue(undefined);
+  });
+
+  describe("completeResumeProcessing", () => {
+    it("marks the resume ready and persists the plan on the interview", async () => {
+      const plan = { questions: ["Q1", "Q2"], focusAreas: ["React"] };
+      mockCtx.db.get
+        .mockResolvedValueOnce(resume)
+        .mockResolvedValueOnce(mockInterview);
+
+      const result = await completeResumeProcessing(mockCtx, {
+        resumeId: "resume-1",
+        interviewId: "interview-1",
+        resumeText: "Extracted resume text",
+        chunkCount: 3,
+        plan,
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "resume-1",
+        expect.objectContaining({ status: "ready" })
+      );
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "interview-1",
+        expect.objectContaining({ resumeText: "Extracted resume text", plan })
+      );
+    });
+
+    it("is a no-op when the referenced documents no longer exist", async () => {
+      mockCtx.db.get.mockResolvedValue(null);
+
+      const result = await completeResumeProcessing(mockCtx, {
+        resumeId: "resume-1",
+        interviewId: "interview-1",
+        resumeText: "text",
+        chunkCount: 0,
+        plan: { questions: [], focusAreas: [] },
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("failResumeProcessing", () => {
+    it("marks the resume failed and the interview failed", async () => {
+      mockCtx.db.get
+        .mockResolvedValueOnce(resume)
+        .mockResolvedValueOnce(mockInterview);
+
+      const result = await failResumeProcessing(mockCtx, {
+        resumeId: "resume-1",
+        interviewId: "interview-1",
+        error: "boom",
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "resume-1",
+        expect.objectContaining({ status: "failed" })
+      );
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "interview-1",
+        expect.objectContaining({ status: "failed" })
+      );
+    });
+
+    it("does not fail an already completed interview", async () => {
+      mockCtx.db.get
+        .mockResolvedValueOnce(resume)
+        .mockResolvedValueOnce({ ...mockInterview, status: "completed" });
+
+      await failResumeProcessing(mockCtx, {
+        resumeId: "resume-1",
+        interviewId: "interview-1",
+      });
+
+      expect(mockCtx.db.patch).toHaveBeenCalledTimes(1);
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "resume-1",
+        expect.objectContaining({ status: "failed" })
+      );
     });
   });
 });
