@@ -14,7 +14,7 @@ import {
   StreamVideo,
   StreamVideoClient,
 } from "@stream-io/video-react-sdk";
-import { AlertCircle, Loader2, VideoOff } from "lucide-react";
+import { AlertCircle, Loader2, Sparkles, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { captureException } from "@/lib/glitchtip";
@@ -36,12 +36,6 @@ const StreamSessionContext = createContext<StreamSessionContextValue | null>(
   null
 );
 
-/**
- * Access the active Stream call from within a `StreamProvider`.
- *
- * Throws when used outside the provider so a misplaced hook fails loudly
- * during development rather than silently rendering an empty room.
- */
 export function useStreamSession(): StreamSessionContextValue {
   const value = useContext(StreamSessionContext);
   if (!value) {
@@ -75,24 +69,30 @@ interface StatusScreenProps {
 
 function StatusScreen({ icon, title, description, action }: StatusScreenProps) {
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-4 p-6 text-center">
-      {icon}
-      <div className="space-y-1">
-        <h2 className="text-xl font-semibold">{title}</h2>
-        <p className="max-w-md text-sm text-muted-foreground">{description}</p>
+    <div className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center overflow-hidden bg-slate-950/80 px-4 backdrop-blur-xl transition-all">
+      {/* Background Ambient Radial Glow */}
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(50%_50%_at_50%_50%,rgba(124,58,237,0.25),transparent_100%)]"
+        aria-hidden="true"
+      />
+
+      {/* Floating Glassmorphism Modal Box */}
+      <div className="relative flex w-full max-w-md flex-col items-center justify-center rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 text-center shadow-2xl backdrop-blur-md sm:p-8">
+        <div className="mb-4">{icon}</div>
+        <div className="space-y-1.5">
+          <h2 className="text-xl font-extrabold tracking-tight text-slate-100 sm:text-2xl">
+            {title}
+          </h2>
+          <p className="text-xs text-slate-400 leading-relaxed sm:text-sm">
+            {description}
+          </p>
+        </div>
+        {action && <div className="mt-6 w-full">{action}</div>}
       </div>
-      {action}
     </div>
   );
 }
 
-/**
- * Connects a candidate to their interview's Stream call.
- *
- * Owns the full connection lifecycle: request a token, create/reuse the video
- * client, join the call, and leave on unmount. While connecting (or when the
- * room is unavailable) it renders an explanatory screen instead of children.
- */
 export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   const [state, setState] = useState<ProviderState>({ status: "loading" });
 
@@ -106,8 +106,6 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
         const session = await fetchStreamSession(interviewId);
         if (cancelled) return;
 
-        // Reuse the cached client so React StrictMode's double-mount does not
-        // create duplicate connections for the same user.
         const client = StreamVideoClient.getOrCreateInstance({
           apiKey: session.apiKey,
           token: session.token,
@@ -122,17 +120,12 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
           return;
         }
 
-        // Closed captions power the live transcript. They are optional: a
-        // failure must never block joining the interview.
         try {
           await call.startClosedCaptions({ language: "en" });
         } catch (captionError) {
           console.warn("Closed captions are unavailable", captionError);
         }
 
-        // Ask the server to place the AI interviewer in the call. Best-effort:
-        // the candidate can still be interviewed by the room without it, but a
-        // failure must be visible instead of silently leaving the room empty.
         if (!cancelled) {
           void dispatchInterviewerAgent(interviewId).catch((agentError) => {
             console.warn("AI interviewer dispatch failed", agentError);
@@ -176,9 +169,14 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   if (state.status === "loading") {
     return (
       <StatusScreen
-        icon={<Loader2 className="h-10 w-10 animate-spin text-primary" />}
-        title="Connecting to your interview"
-        description="Allow camera and microphone access when your browser prompts you."
+        icon={
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 text-primary ring-1 ring-primary/30">
+            <Loader2 className="h-8 w-8 animate-spin" />
+            <span className="absolute -inset-1 -z-10 rounded-2xl bg-primary/20 blur-md" />
+          </div>
+        }
+        title="Connecting Session..."
+        description="Initializing video room and requesting camera/microphone access. Please allow browser prompts to continue."
       />
     );
   }
@@ -186,12 +184,16 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   if (state.status === "unconfigured") {
     return (
       <StatusScreen
-        icon={<VideoOff className="h-10 w-10 text-muted-foreground" />}
-        title="Live interview room unavailable"
-        description="The video interview room is not configured yet. Your interview questions are still saved."
+        icon={
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-800 text-slate-400 ring-1 ring-slate-700">
+            <VideoOff className="h-8 w-8" />
+          </div>
+        }
+        title="Interview Room Unavailable"
+        description="The live video stream is not configured for this session yet. Your responses and questions are safely saved."
         action={
-          <Button asChild variant="outline">
-            <Link href="/dashboard">Back to Dashboard</Link>
+          <Button asChild className="w-full rounded-xl bg-slate-800 text-slate-100 hover:bg-slate-700">
+            <Link href="/dashboard">Return to Dashboard</Link>
           </Button>
         }
       />
@@ -201,12 +203,16 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   if (state.status === "error") {
     return (
       <StatusScreen
-        icon={<AlertCircle className="h-10 w-10 text-destructive" />}
-        title="Connection error"
+        icon={
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/20 text-red-400 ring-1 ring-red-500/30">
+            <AlertCircle className="h-8 w-8" />
+          </div>
+        }
+        title="Connection Error"
         description={state.message}
         action={
-          <Button asChild variant="outline">
-            <Link href="/dashboard">Back to Dashboard</Link>
+          <Button asChild className="w-full rounded-xl bg-slate-800 text-slate-100 hover:bg-slate-700">
+            <Link href="/dashboard">Return to Dashboard</Link>
           </Button>
         }
       />
@@ -219,9 +225,6 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
     >
       <StreamVideo client={state.client}>
         <StreamCall call={state.call}>
-          {/* StreamTheme adds the `str-video` root class that the SDK's
-              stylesheet scopes its CSS variables and base styles to. Without
-              it the SDK components render unstyled. */}
           <StreamTheme className="h-full">{children}</StreamTheme>
         </StreamCall>
       </StreamVideo>

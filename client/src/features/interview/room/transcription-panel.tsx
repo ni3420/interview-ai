@@ -55,9 +55,14 @@ export function TranscriptionPanel({
   onTranscript,
   className,
 }: TranscriptionPanelProps) {
-  const [transcripts, setTranscripts] = useState<TranscriptItem[]>([]);
+  const [transcripts, setTranscripts] = useState<
+    Array<TranscriptItem & { renderKey: string }>
+  >([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const onTranscriptRef = useRef(onTranscript);
+  // Stream reuses the caption `id` across several events, so it is not unique
+  // per rendered row. Keep a separate monotonic key for React.
+  const renderKeyRef = useRef(0);
 
   // Keep the latest callback without re-subscribing on every render.
   useEffect(() => {
@@ -83,7 +88,12 @@ export function TranscriptionPanel({
         isFinal: true,
       };
 
-      setTranscripts((previous) => [...previous, item]);
+      const rendered = {
+        ...item,
+        renderKey: `${item.id}:${renderKeyRef.current++}`,
+      };
+
+      setTranscripts((previous) => [...previous, rendered]);
       onTranscriptRef.current?.(item);
     };
 
@@ -112,7 +122,7 @@ export function TranscriptionPanel({
         ) : (
           transcripts.map((item) => (
             <div
-              key={item.id}
+              key={item.renderKey}
               className="space-y-1 rounded-xl border bg-muted/40 p-3"
             >
               <div className="flex items-center justify-between text-xs text-muted-foreground">

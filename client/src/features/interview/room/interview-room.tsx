@@ -35,13 +35,7 @@ function RoomHeader({
   return (
     <header className="flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-900/80 px-6 py-3 backdrop-blur">
       <div className="flex min-w-0 items-center gap-4">
-        <Link
-          href="/dashboard"
-          className="text-gray-400 transition hover:text-white"
-          aria-label="Back to dashboard"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
+       
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-lg font-semibold">
             <Video className="h-5 w-5 text-primary" />

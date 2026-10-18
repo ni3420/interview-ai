@@ -89,6 +89,28 @@ describe("TranscriptionPanel", () => {
     );
   });
 
+  it("renders repeated caption ids without duplicate React keys", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { call, emit } = createFakeCall();
+    render(<TranscriptionPanel call={call} />);
+
+    act(() => {
+      emit({ closed_caption: { id: "dup-id", text: "First part." } });
+      emit({ closed_caption: { id: "dup-id", text: "Second part." } });
+    });
+
+    expect(screen.getByText("First part.")).toBeInTheDocument();
+    expect(screen.getByText("Second part.")).toBeInTheDocument();
+
+    const loggedKeyWarning = errorSpy.mock.calls.some((args) =>
+      args.some(
+        (arg) => typeof arg === "string" && arg.includes("same key")
+      )
+    );
+    expect(loggedKeyWarning).toBe(false);
+    errorSpy.mockRestore();
+  });
+
   it("ignores empty caption events", () => {
     const { call, emit } = createFakeCall();
     const onTranscript = vi.fn();
