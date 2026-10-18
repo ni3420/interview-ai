@@ -1,125 +1,87 @@
 "use client";
 
 import Link from "next/link";
-import { Sparkles, FileText, Brain, ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Sparkles } from "lucide-react";
+import { Button } from "@/features/components/common/Button";
+import { ThemeToggle } from "@/features/components/common/Toggle";
+import { HeroSection } from "@/features/components/landing/HeroSection";
+import { FeatureGrid } from "@/features/components/landing/FeatureGrid";
+import { PricingSection } from "@/features/components/landing/PricingSection";
+
+const navLinks = [
+  { label: "Features", href: "#features" },
+  { label: "Solutions", href: "#solutions" },
+  { label: "How it Works", href: "#how-it-works" },
+  { label: "Pricing", href: "#pricing" },
+];
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b bg-background/95 backdrop-blur sticky top-0 z-40">
-        <div className="container flex h-16 items-center justify-between px-4">
-          <span className="text-xl font-semibold">Interview AI</span>
-          <div className="flex items-center gap-4">
-            <Link href="/sign-in">
-              <Button variant="ghost">Sign In</Button>
-            </Link>
-            <Link href="/sign-up">
-              <Button>Get Started</Button>
-            </Link>
+    <div className="relative flex min-h-screen flex-col items-center justify-between bg-white dark:bg-slate-950">
+      {/* Background Radial Glow */}
+      <div
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(60%_40%_at_50%_0%,rgba(139,92,246,0.1),transparent_100%)] dark:bg-[radial-gradient(60%_40%_at_50%_0%,rgba(124,58,237,0.18),transparent_100%)]"
+        aria-hidden="true"
+      />
+
+      {/* Sticky Centered Header Navigation Bar */}
+      <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/80 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/80">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              InterviewAI
+            </span>
+          </Link>
+
+          <nav className="hidden items-center gap-8 md:flex">
+            {navLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                {link.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+              <Link href="/sign-in">Sign In</Link>
+            </Button>
+            <Button asChild size="sm">
+              <Link href="/sign-up">Get Started</Link>
+            </Button>
           </div>
         </div>
       </header>
 
-      <main className="flex-1">
-        <section className="container py-20 md:py-32 px-4 text-center">
-          <div className="max-w-3xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-8">
-              <Sparkles className="h-4 w-4" />
-              AI-Powered Mock Interviews
-            </div>
-            <h1 className="text-4xl md:text-6xl font-semibold tracking-tight mb-6">
-              Ace Your Next Interview with <span className="text-primary">AI Practice</span>
-            </h1>
-            <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-              Upload your resume, paste a job description, and get personalized mock interviews 
-              with adaptive follow-up questions and detailed feedback reports.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link href="/sign-up">
-                <Button size="lg" className="gap-2">
-                  Start Free Interview
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
-              <Link href="/sign-in">
-                <Button size="lg" variant="outline">Sign In</Button>
-              </Link>
-            </div>
+      {/* Main Centered Content Container */}
+      <main className="flex w-full flex-1 flex-col items-center">
+        <div className="w-full max-w-6xl px-4 sm:px-6 lg:px-8">
+          <HeroSection />
+
+          <div id="features" className="py-16">
+            <FeatureGrid />
           </div>
-        </section>
 
-        <section className="container py-16 px-4">
-          <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="mx-auto w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <FileText className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-center mb-2">Resume & JD Analysis</h3>
-                <p className="text-sm text-muted-foreground text-center">
-                  Upload your resume and paste the job description. Our AI analyzes both to 
-                  create a tailored interview plan.
-                </p>
-              </CardContent>
-            </Card>
+          <div id="solutions" className="sr-only" />
+          <div id="how-it-works" className="sr-only" />
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="mx-auto w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <Brain className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-center mb-2">Adaptive Follow-ups</h3>
-                <p className="text-sm text-muted-foreground text-center">
-                  Questions adapt to your answers in real-time. Get follow-up questions that 
-                  dig deeper into your experience and knowledge.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="mx-auto w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <Sparkles className="h-6 w-6 text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-center mb-2">Detailed Reports</h3>
-                <p className="text-sm text-muted-foreground text-center">
-                  Receive comprehensive feedback with scores, strengths, weaknesses, and 
-                  actionable improvement recommendations.
-                </p>
-              </CardContent>
-            </Card>
+          <div id="pricing" className="py-16">
+            <PricingSection />
           </div>
-        </section>
-
-        <section className="container py-16 px-4">
-          <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-3xl font-semibold mb-4">How It Works</h2>
-            <div className="grid md:grid-cols-3 gap-8 mt-10">
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-primary">1</div>
-                <h3 className="font-semibold mb-2">Setup</h3>
-                <p className="text-sm text-muted-foreground">Upload resume + paste job description</p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-primary">2</div>
-                <h3 className="font-semibold mb-2">Interview</h3>
-                <p className="text-sm text-muted-foreground">Answer AI-generated questions with adaptive follow-ups</p>
-              </div>
-              <div className="text-center">
-                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4 text-2xl font-bold text-primary">3</div>
-                <h3 className="font-semibold mb-2">Report</h3>
-                <p className="text-sm text-muted-foreground">Get detailed feedback & improvement plan</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        </div>
       </main>
 
-      <footer className="border-t py-8">
-        <div className="container px-4 text-center text-sm text-muted-foreground">
-          <p>Interview AI — AI-powered interview preparation platform</p>
+      {/* Centered Footer */}
+      <footer className="w-full border-t border-slate-200/80 py-8 dark:border-slate-800/80">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-center px-4 text-center text-sm text-slate-500 dark:text-slate-400">
+          <p>© {new Date().getFullYear()} InterviewAI — AI-powered interview preparation platform</p>
         </div>
       </footer>
     </div>
