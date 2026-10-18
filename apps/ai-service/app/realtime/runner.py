@@ -1,0 +1,82 @@
+"""Runs the realtime vision agent for a single interview call.
+
+Optional vision-agents imports are loaded lazily so the service can
+start even when the realtime dependencies are not installed.
+"""
+
+import logging
+from typing import Any
+
+from app.core.config import settings
+from app.realtime.instructions import build_instructions
+from app.schemas.realtime import RealtimeJoinRequest
+
+logger = logging.getLogger(__name__)
+
+
+class RealtimeRuntimeUnavailableError(RuntimeError):
+    """The realtime agent cannot run (missing credentials or dependencies)."""
+
+
+def ensure_available() -> None:
+    """Fail fast when the agent cannot start."""
+    if not settings.stream_api_key or not settings.stream_api_secret:
+        raise RealtimeRuntimeUnavailableError(
+            "Stream credentials are not configured for the realtime agent."
+        )
+    _load_runtime()
+
+
+def _load_runtime() -> tuple[Any, Any, Any, Any]:
+    try:
+        import vision_agents.plugins.ollama as ollama
+        import vision_agents.plugins.getstream as getstream
+        from vision_agents.core import Agent, User
+    except ModuleNotFoundError as exc:
+        raise RealtimeRuntimeUnavailableError(
+            "Realtime agent dependencies are not installed or "
+            "the Ollama provider is unavailable."
+        ) from exc
+
+    return Agent, User, ollama, getstream
+
+
+async def run_agent(request: RealtimeJoinRequest) -> None:
+    """Join the call as the AI interviewer and run until it ends."""
+    ensure_available()
+    Agent, User, ollama, getstream = _load_runtime()
+
+    instructions = build_instructions(request)
+
+    agent_user = User(
+        id=settings.realtime_agent_user_id,
+        name=settings.realtime_agent_user_name,
+    )
+
+    agent = Agent(
+        edge=getstream.Edge(),
+        llm=ollama.Realtime(model=settings.realtime_model),
+        agent_user=agent_user,
+        instructions=instructions,
+    )
+
+    call = await agent.create_call(request.call_type, request.call_id)
+
+    logger.info(
+        "AI interviewer joining interview call",
+        extra={
+            "call_id": request.call_id,
+            "call_type": request.call_type,
+        },
+    )
+
+    async with agent.join(call):
+        await agent.simple_response(
+            text="Greet the candidate and ask the first interview question."
+        )
+        await agent.finish()
+
+    logger.info(
+        "AI interviewer left interview call",
+        extra={"call_id": request.call_id},
+    )

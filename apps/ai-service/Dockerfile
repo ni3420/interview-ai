@@ -15,9 +15,12 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies first so application changes don't bust this layer.
+# INSTALL_REALTIME pulls the heavier vision-agents stack (Gemini Live + WebRTC).
 COPY pyproject.toml ./
 COPY app ./app
-RUN pip install --upgrade pip && pip install .
+ARG INSTALL_REALTIME=false
+RUN pip install --upgrade pip \
+    && if [ "$INSTALL_REALTIME" = "true" ]; then pip install ".[realtime]"; else pip install .; fi
 
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 appuser \

@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/layout/Providers";
 import UserSyncProvider from "@/components/layout/UserSyncProvider";
+import "@stream-io/video-react-sdk/dist/css/styles.css";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

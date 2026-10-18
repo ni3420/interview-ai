@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import interviews, resumes
+
+from app.api.v1 import interviews, realtime, resumes
 from app.core.config import settings
 
 app = FastAPI(
@@ -19,6 +20,7 @@ app.add_middleware(
 
 app.include_router(interviews.router, prefix="/v1/interviews", tags=["interviews"])
 app.include_router(resumes.router, prefix="/v1/resumes", tags=["resumes"])
+app.include_router(realtime.router, prefix="/v1/realtime", tags=["realtime"])
 
 
 @app.get("/health")

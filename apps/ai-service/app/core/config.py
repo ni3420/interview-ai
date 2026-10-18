@@ -51,5 +51,18 @@ class Settings(BaseSettings):
     chunk_size: int = 1000
     chunk_overlap: int = 150
 
+    # --- Realtime vision agent ------------------------------------------------
+    # The agent joins the interview's Stream call as a bot participant and runs
+    # a speech-to-speech + vision model (Gemini Live by default). Stream
+    # credentials are server-only and must never reach the browser.
+    stream_api_key: str = ""
+    stream_api_secret: str = ""
+    realtime_model: str = "gemini-3.1-flash-live-preview"
+    realtime_agent_user_id: str = "ai-interviewer"
+    realtime_agent_user_name: str = "AI Interviewer"
+    # Cap the grounded context injected into the agent's instructions.
+    realtime_max_resume_chars: int = 6000
+    realtime_max_questions: int = 25
+
 
 settings = Settings()

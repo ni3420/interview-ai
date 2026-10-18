@@ -36,6 +36,10 @@ services:
   ai-service:
     build:
       context: ./apps/ai-service
+      args:
+        # Build the realtime vision agent into the image. Set to false to skip
+        # the heavy vision-agents stack when live interviews are unused.
+        INSTALL_REALTIME: ${INSTALL_REALTIME:-true}
     restart: unless-stopped
     env_file:
       - path: ./apps/ai-service/.env
@@ -51,6 +55,10 @@ services:
       # AI_PROVIDER=gemini plus GEMINI_API_KEY to use the remote provider.
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      # Realtime vision agent. Secrets (STREAM_API_KEY, STREAM_API_SECRET,
+      # GEMINI_API_KEY) come from env_file above; only non-secret overrides go
+      # here, otherwise an empty ${VAR:-} default would mask env_file values.
+      REALTIME_MODEL: ${REALTIME_MODEL:-gemini-3.1-flash-live-preview}
     # Lets the container reach Ollama running on the host.
     extra_hosts:
       - "host.docker.internal:host-gateway"
