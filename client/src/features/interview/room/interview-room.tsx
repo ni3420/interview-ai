@@ -1,18 +1,21 @@
 "use client";
 
 import Link from "next/link";
+import { useCallback } from "react";
 import {
   CallControls,
   SpeakerLayout,
   useCallStateHooks,
 } from "@stream-io/video-react-sdk";
-import { ArrowLeft, CheckCircle, MessageSquare, Users, Video } from "lucide-react";
+import { ArrowLeft, CheckCircle, Clock, MessageSquare, Users, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   TranscriptionPanel,
   type TranscriptItem,
 } from "./transcription-panel";
 import { useStreamSession } from "./stream-provider";
+import { useInterviewTimer } from "./use-interview-timer";
+import { formatCountdown, isTimeRunningLow } from "@/lib/interview-timer";
 
 interface InterviewRoomProps {
   /** Target role / job description summary shown in the header. */
@@ -22,15 +25,25 @@ interface InterviewRoomProps {
   /** Optional sink for finalized transcript turns. */
   onTranscript?: (item: TranscriptItem) => void;
   isFinishing?: boolean;
+  /** Epoch ms when the interview started (persisted in Convex). */
+  startedAt?: number | null;
+  /** Selected session length in minutes. */
+  durationMinutes: number;
+  /** Called when the timer runs out. Falls back to `onFinish` when omitted. */
+  onTimeExpired?: () => void | Promise<void>;
 }
 
 function RoomHeader({
   role,
   onFinish,
   isFinishing,
-}: Pick<InterviewRoomProps, "role" | "onFinish" | "isFinishing">) {
+  remainingMs,
+}: Pick<InterviewRoomProps, "role" | "onFinish" | "isFinishing"> & {
+  remainingMs: number | null;
+}) {
   const { useParticipantCount } = useCallStateHooks();
   const participantCount = useParticipantCount();
+  const isLow = remainingMs !== null && isTimeRunningLow(remainingMs);
 
   return (
     <header className="flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-900/80 px-6 py-3 backdrop-blur">
@@ -48,6 +61,21 @@ function RoomHeader({
       </div>
 
       <div className="flex items-center gap-3">
+        {remainingMs !== null && (
+          <span
+            data-testid="interview-countdown"
+            role="timer"
+            aria-live="off"
+            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+              isLow
+                ? "border-red-500/40 bg-red-500/10 text-red-400"
+                : "border-gray-700 bg-gray-800 text-gray-200"
+            }`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            {formatCountdown(remainingMs)}
+          </span>
+        )}
         <span className="hidden items-center gap-1.5 rounded-full border border-gray-700 bg-gray-800 px-3 py-1 text-xs font-medium text-gray-300 sm:flex">
           <Users className="h-3.5 w-3.5" />
           {participantCount} in room
@@ -82,12 +110,28 @@ export function InterviewRoom({
   onFinish,
   onTranscript,
   isFinishing = false,
+  startedAt = null,
+  durationMinutes,
+  onTimeExpired,
 }: InterviewRoomProps) {
   const { call } = useStreamSession();
+  const handleExpire = useCallback(() => {
+    void (onTimeExpired ?? onFinish)();
+  }, [onTimeExpired, onFinish]);
+  const remainingMs = useInterviewTimer({
+    startedAt: startedAt ?? null,
+    durationMinutes,
+    onExpire: handleExpire,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-gray-950 text-white">
-      <RoomHeader role={role} onFinish={onFinish} isFinishing={isFinishing} />
+      <RoomHeader
+        role={role}
+        onFinish={onFinish}
+        isFinishing={isFinishing}
+        remainingMs={remainingMs}
+      />
 
       <main className="grid flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-[1fr_400px]">
         <div className="flex h-full flex-col gap-4 overflow-hidden">

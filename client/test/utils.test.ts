@@ -9,6 +9,7 @@ describe("Interview Setup Validation", () => {
       const result = interviewSetupSchema.safeParse({
         resumeId: "resumes_123",
         jobDescription: "Senior Frontend Engineer role. Requirements: React, TypeScript, Next.js, GraphQL, 5+ years experience. Responsible for building user-facing features.",
+        durationMinutes: 30,
       });
 
       expect(result.success).toBe(true);
@@ -18,6 +19,7 @@ describe("Interview Setup Validation", () => {
       const result = interviewSetupSchema.safeParse({
         resumeId: "",
         jobDescription: "Valid job description with enough content to pass validation",
+        durationMinutes: 30,
       });
 
       expect(result.success).toBe(false);
@@ -31,6 +33,7 @@ describe("Interview Setup Validation", () => {
       const result = interviewSetupSchema.safeParse({
         resumeId: "resumes_123",
         jobDescription: "short",
+        durationMinutes: 30,
       });
 
       expect(result.success).toBe(false);
@@ -45,11 +48,25 @@ describe("Interview Setup Validation", () => {
       const result = interviewSetupSchema.safeParse({
         resumeId: "",
         jobDescription: "short",
+        durationMinutes: 30,
       });
 
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.errors.length).toBe(2);
+      }
+    });
+
+    it("fails when the interview length is not an allowed value", () => {
+      const result = interviewSetupSchema.safeParse({
+        resumeId: "resumes_123",
+        jobDescription: "Valid job description with enough content to pass validation",
+        durationMinutes: 12,
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.errors[0].path).toContain("durationMinutes");
       }
     });
   });

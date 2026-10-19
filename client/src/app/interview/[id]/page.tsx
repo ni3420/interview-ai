@@ -23,6 +23,7 @@ interface Interview {
   status: InterviewStatus;
   plan?: { questions: string[] } | null;
   currentQuestionIndex: number;
+  durationMinutes?: number;
   startedAt?: number;
   completedAt?: number;
   createdAt: number;
@@ -67,6 +68,11 @@ export default function InterviewPage() {
     }
   }, [interviewId, router, updateStatus]);
 
+  const handleTimeExpired = useCallback(async () => {
+    toast.info("Time's up! Ending the interview and generating your report...");
+    await handleFinish();
+  }, [handleFinish]);
+
   if (interview === undefined) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -96,6 +102,9 @@ export default function InterviewPage() {
         onFinish={handleFinish}
         onTranscript={recordTranscript}
         isFinishing={isFinishing}
+        startedAt={interview.startedAt ?? null}
+        durationMinutes={interview.durationMinutes ?? 30}
+        onTimeExpired={handleTimeExpired}
       />
     </StreamProvider>
   );

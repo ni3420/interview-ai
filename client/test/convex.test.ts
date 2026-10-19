@@ -72,7 +72,22 @@ describe("Convex - Interviews", () => {
         jobDescription: "Test JD",
         status: "setup",
         currentQuestionIndex: 0,
+        durationMinutes: 30,
       }));
+    });
+
+    it("stores the selected interview duration", async () => {
+      mockCtx.db.insert.mockResolvedValue("new-interview-id");
+
+      await createInterview(mockCtx, {
+        jobDescription: "Test JD",
+        durationMinutes: 15,
+      });
+
+      expect(mockCtx.db.insert).toHaveBeenCalledWith(
+        "interviews",
+        expect.objectContaining({ durationMinutes: 15 })
+      );
     });
   });
 

@@ -14,6 +14,7 @@ import {
   AlertCircle,
   Briefcase,
   UploadCloud,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ResumeUpload } from "@/features/interview/ResumeUpload";
 import { JobDescriptionInput } from "@/features/interview/JobDescriptionInput";
 import { interviewSetupSchema } from "@/features/interview/validation";
+import {
+  INTERVIEW_DURATIONS,
+  DEFAULT_INTERVIEW_DURATION,
+  type InterviewDuration,
+} from "@/lib/interview-timer";
 import { toast } from "sonner";
 
 interface UploadedResume {
@@ -34,6 +40,9 @@ export default function InterviewSetupPage() {
 
   const [resume, setResume] = useState<UploadedResume | null>(null);
   const [jobDescription, setJobDescription] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState<InterviewDuration>(
+    DEFAULT_INTERVIEW_DURATION
+  );
   const [errors, setErrors] = useState<{
     resumeId?: string;
     jobDescription?: string;
@@ -46,6 +55,7 @@ export default function InterviewSetupPage() {
     const result = interviewSetupSchema.safeParse({
       resumeId: resume?.resumeId ?? "",
       jobDescription,
+      durationMinutes,
     });
 
     if (!result.success) {
@@ -67,6 +77,7 @@ export default function InterviewSetupPage() {
       const interviewId = await createInterview({
         resumeId: resume.resumeId,
         jobDescription,
+        durationMinutes,
       });
 
       // Extract, chunk, embed and index the resume into Qdrant.
@@ -183,6 +194,53 @@ export default function InterviewSetupPage() {
                   onChange={setJobDescription}
                   error={errors.jobDescription}
                 />
+              </div>
+
+              {/* Step 3: Interview Length */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+                      3
+                    </span>
+                    <label className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Interview Length
+                    </label>
+                  </div>
+                  <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                    Ends automatically
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {INTERVIEW_DURATIONS.map((minutes) => {
+                    const isSelected = durationMinutes === minutes;
+                    return (
+                      <button
+                        key={minutes}
+                        type="button"
+                        onClick={() => setDurationMinutes(minutes)}
+                        aria-pressed={isSelected}
+                        className={`flex flex-col items-center justify-center gap-1 rounded-xl border px-3 py-3 text-center transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary shadow-sm"
+                            : "border-slate-200 bg-slate-50/60 text-slate-600 hover:border-primary/40 hover:bg-white dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300 dark:hover:bg-slate-900/70"
+                        }`}
+                      >
+                        <span className="text-lg font-bold">{minutes}</span>
+                        <span className="text-[11px] font-medium uppercase tracking-wider">
+                          minutes
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Your session will end automatically after{" "}
+                  {durationMinutes} minutes and your report will be generated.
+                </p>
               </div>
 
               {/* Action Trigger */}

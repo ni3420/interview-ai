@@ -24,6 +24,7 @@ export default defineSchema({
     ),
     plan: v.optional(v.any()),
     currentQuestionIndex: v.number(),
+    durationMinutes: v.optional(v.number()),
     startedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
     createdAt: v.number(),

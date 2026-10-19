@@ -7,6 +7,7 @@ export const createInterview = mutation({
     resumeId: v.optional(v.id("resumes")),
     resumeText: v.optional(v.string()),
     jobDescription: v.string(),
+    durationMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await requireAuthUserId(ctx);
@@ -19,6 +20,7 @@ export const createInterview = mutation({
       jobDescription: args.jobDescription,
       status: "setup",
       currentQuestionIndex: 0,
+      durationMinutes: args.durationMinutes ?? 30,
       createdAt: now,
       updatedAt: now,
     });
