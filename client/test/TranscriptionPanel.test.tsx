@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import type { Call } from "@stream-io/video-react-sdk";
 import {
   TranscriptionPanel,
@@ -11,6 +11,7 @@ type CaptionHandler = (event: {
     id?: string;
     text?: string;
     speaker_id?: string;
+    start_time?: string;
     user?: { id?: string; name?: string };
   };
 }) => void;
@@ -89,26 +90,135 @@ describe("TranscriptionPanel", () => {
     );
   });
 
-  it("renders repeated caption ids without duplicate React keys", () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("shows a question together with the answer that follows it", () => {
     const { call, emit } = createFakeCall();
     render(<TranscriptionPanel call={call} />);
 
     act(() => {
-      emit({ closed_caption: { id: "dup-id", text: "First part." } });
-      emit({ closed_caption: { id: "dup-id", text: "Second part." } });
+      emit({
+        closed_caption: {
+          id: "q-1",
+          text: "Tell me about your React experience.",
+          start_time: "t1",
+          user: { id: "ai-interviewer", name: "AI Interviewer" },
+        },
+      });
+      emit({
+        closed_caption: {
+          id: "a-1",
+          text: "I built several design systems.",
+          start_time: "t2",
+          speaker_id: "user_1",
+        },
+      });
     });
 
-    expect(screen.getByText("First part.")).toBeInTheDocument();
-    expect(screen.getByText("Second part.")).toBeInTheDocument();
+    const groups = screen.getAllByTestId("transcript-group");
+    expect(groups).toHaveLength(1);
+    expect(
+      within(groups[0]).getByText("Tell me about your React experience.")
+    ).toBeInTheDocument();
+    expect(
+      within(groups[0]).getByText("I built several design systems.")
+    ).toBeInTheDocument();
+  });
 
-    const loggedKeyWarning = errorSpy.mock.calls.some((args) =>
-      args.some(
-        (arg) => typeof arg === "string" && arg.includes("same key")
-      )
-    );
-    expect(loggedKeyWarning).toBe(false);
-    errorSpy.mockRestore();
+  it("does not repeat a question when Stream re-delivers the same utterance", () => {
+    const { call, emit } = createFakeCall();
+    const onTranscript = vi.fn<(item: TranscriptItem) => void>();
+    render(<TranscriptionPanel call={call} onTranscript={onTranscript} />);
+
+    act(() => {
+      const payload = {
+        closed_caption: {
+          id: "q-1",
+          text: "Tell me about React.",
+          start_time: "t1",
+          user: { id: "ai-interviewer", name: "AI Interviewer" },
+        },
+      };
+      emit(payload);
+      emit(payload);
+    });
+
+    expect(screen.getAllByText("Tell me about React.")).toHaveLength(1);
+    expect(screen.getAllByTestId("transcript-group")).toHaveLength(1);
+    expect(onTranscript).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the latest text when a caption is refined for the same utterance", () => {
+    const { call, emit } = createFakeCall();
+    render(<TranscriptionPanel call={call} />);
+
+    act(() => {
+      emit({
+        closed_caption: {
+          id: "q-1",
+          text: "Tell me about",
+          start_time: "t1",
+          speaker_id: "user_1",
+        },
+      });
+      emit({
+        closed_caption: {
+          id: "q-1",
+          text: "Tell me about React.",
+          start_time: "t1",
+          speaker_id: "user_1",
+        },
+      });
+    });
+
+    expect(screen.getAllByText("Tell me about React.")).toHaveLength(1);
+    expect(screen.queryByText("Tell me about")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("transcript-group")).toHaveLength(1);
+  });
+
+  it("creates a separate group for each question", () => {
+    const { call, emit } = createFakeCall();
+    render(<TranscriptionPanel call={call} />);
+
+    act(() => {
+      emit({
+        closed_caption: {
+          id: "q-1",
+          text: "Question one?",
+          start_time: "t1",
+          user: { id: "ai-interviewer", name: "AI Interviewer" },
+        },
+      });
+      emit({
+        closed_caption: {
+          id: "a-1",
+          text: "Answer one.",
+          start_time: "t2",
+          speaker_id: "user_1",
+        },
+      });
+      emit({
+        closed_caption: {
+          id: "q-2",
+          text: "Question two?",
+          start_time: "t3",
+          user: { id: "ai-interviewer", name: "AI Interviewer" },
+        },
+      });
+      emit({
+        closed_caption: {
+          id: "a-2",
+          text: "Answer two.",
+          start_time: "t4",
+          speaker_id: "user_1",
+        },
+      });
+    });
+
+    const groups = screen.getAllByTestId("transcript-group");
+    expect(groups).toHaveLength(2);
+    expect(within(groups[0]).getByText("Question one?")).toBeInTheDocument();
+    expect(within(groups[0]).getByText("Answer one.")).toBeInTheDocument();
+    expect(within(groups[1]).getByText("Question two?")).toBeInTheDocument();
+    expect(within(groups[1]).getByText("Answer two.")).toBeInTheDocument();
   });
 
   it("ignores empty caption events", () => {

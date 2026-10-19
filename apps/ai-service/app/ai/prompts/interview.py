@@ -82,6 +82,10 @@ Return ONLY a JSON object with this structure:
   ]
 }}
 
+Return exactly one entry in "question_scores" for every Q&A pair provided, in the
+same order. "question_index" must be the 0-based position of the pair exactly as
+labelled below (0 for the first pair, 1 for the second, and so on).
+
 Scoring guidelines:
 - 90-100: Exceptional - comprehensive, accurate, well-structured
 - 75-89: Strong - good depth, minor gaps

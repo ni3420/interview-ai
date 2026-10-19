@@ -21,6 +21,9 @@ import {
 export function useTranscriptRecorder(interviewId: string) {
   const saveAnswer = useMutation(api.answers.saveAnswer);
   const stateRef = useRef<RecorderState>(initialRecorderState);
+  // Serialize writes so a later, fuller answer for the same question can never
+  // be overwritten by an earlier in-flight save resolving out of order.
+  const queueRef = useRef<Promise<unknown>>(Promise.resolve());
 
   return useCallback(
     (item: TranscriptItem) => {
@@ -29,9 +32,14 @@ export function useTranscriptRecorder(interviewId: string) {
 
       if (!answer) return;
 
-      void saveAnswer({ interviewId, ...answer }).catch((error) => {
-        captureException(error, { interviewId, scope: "transcript-recorder" });
-      });
+      queueRef.current = queueRef.current
+        .then(() => saveAnswer({ interviewId, ...answer }))
+        .catch((error) => {
+          captureException(error, {
+            interviewId,
+            scope: "transcript-recorder",
+          });
+        });
     },
     [interviewId, saveAnswer]
   );

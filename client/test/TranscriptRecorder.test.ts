@@ -94,4 +94,53 @@ describe("applyTranscriptTurn", () => {
     expect(answer?.questionIndex).toBe(1);
     expect(answer?.question).toBe("Q2");
   });
+
+  it("appends consecutive candidate segments into one answer", () => {
+    let state = applyTranscriptTurn(
+      initialRecorderState,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "Tell me about yourself." })
+    ).state;
+
+    const first = applyTranscriptTurn(state, turn({ text: "I am a frontend" }));
+    state = first.state;
+    const second = applyTranscriptTurn(state, turn({ text: "engineer." }));
+
+    expect(first.answer?.questionIndex).toBe(0);
+    expect(second.answer?.questionIndex).toBe(0);
+    expect(second.answer?.answer).toBe("I am a frontend engineer.");
+    expect(state.nextIndex).toBe(1);
+  });
+
+  it("starts a new answer only after the next question", () => {
+    let state = applyTranscriptTurn(
+      initialRecorderState,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "Q1" })
+    ).state;
+    state = applyTranscriptTurn(state, turn({ text: "First" })).state;
+    state = applyTranscriptTurn(state, turn({ text: "answer" })).state;
+    state = applyTranscriptTurn(
+      state,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "Q2" })
+    ).state;
+    const { answer } = applyTranscriptTurn(state, turn({ text: "Second answer" }));
+
+    expect(answer?.questionIndex).toBe(1);
+    expect(answer?.question).toBe("Q2");
+    expect(answer?.answer).toBe("Second answer");
+  });
+
+  it("appends consecutive interviewer segments into one question", () => {
+    let state = applyTranscriptTurn(
+      initialRecorderState,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "Tell me about your" })
+    ).state;
+    state = applyTranscriptTurn(
+      state,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "React experience." })
+    ).state;
+
+    const { answer } = applyTranscriptTurn(state, turn({ text: "Sure." }));
+
+    expect(answer?.question).toBe("Tell me about your React experience.");
+  });
 });

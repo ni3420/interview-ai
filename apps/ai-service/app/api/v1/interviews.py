@@ -96,7 +96,7 @@ async def generate_next_question(request: NextQuestionRequest):
 )
 async def evaluate_interview(request: EvaluationRequest):
     qa_pairs_str = "\n\n".join(
-        [f"Q{idx + 1}: {qa.get('question', '')}\nA{idx + 1}: {qa.get('answer', '')}"
+        [f"question_index {idx}: {qa.get('question', '')}\nanswer {idx}: {qa.get('answer', '')}"
          for idx, qa in enumerate(request.qa_pairs)]
     )
 

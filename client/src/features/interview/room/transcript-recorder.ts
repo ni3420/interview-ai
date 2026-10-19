@@ -4,18 +4,29 @@ import type { TranscriptItem } from "./transcription-panel";
 /**
  * Turns a live transcript into persisted Q/A pairs.
  *
- * The AI interviewer's turns become the pending question; each candidate turn
- * is saved as an answer to that question. Kept as a pure reducer so the
- * mapping is unit-testable without Stream or Convex.
+ * The AI interviewer's turns build the current question; the candidate's turns
+ * build the answer to it. Captions arrive per speech segment, so consecutive
+ * interviewer segments are appended into one question and consecutive candidate
+ * segments into one answer. A new answer only starts once the interviewer asks
+ * another question.
+ *
+ * Kept as a pure reducer so the mapping is unit-testable without Stream or Convex.
  */
 export interface RecorderState {
   pendingQuestion: string;
+  /** Next fresh answer index to assign. */
   nextIndex: number;
+  /** Index of the answer currently being accumulated, or -1 when none. */
+  currentIndex: number;
+  /** Text accumulated for the answer currently being built. */
+  currentAnswer: string;
 }
 
 export const initialRecorderState: RecorderState = {
   pendingQuestion: "",
   nextIndex: 0,
+  currentIndex: -1,
+  currentAnswer: "",
 };
 
 export interface RecordedAnswer {
@@ -36,15 +47,43 @@ export function applyTranscriptTurn(
   item: TranscriptItem
 ): { state: RecorderState; answer: RecordedAnswer | null } {
   if (isInterviewerTurn(item)) {
-    return { state: { ...state, pendingQuestion: item.text }, answer: null };
+    // A candidate already answered (currentIndex >= 0) means this opens a new
+    // question. Otherwise it is another segment of the question being asked.
+    const startsNewQuestion =
+      state.currentIndex >= 0 || !state.pendingQuestion;
+    const question = startsNewQuestion
+      ? item.text
+      : `${state.pendingQuestion} ${item.text}`.trim();
+
+    return {
+      state: {
+        ...state,
+        pendingQuestion: question,
+        currentIndex: -1,
+        currentAnswer: "",
+      },
+      answer: null,
+    };
   }
 
-  const answer: RecordedAnswer = {
-    questionIndex: state.nextIndex,
-    question: state.pendingQuestion || "Interview question",
-    answer: item.text,
-    followUpCount: 0,
-  };
+  const startsNewAnswer = state.currentIndex < 0;
+  const questionIndex = startsNewAnswer ? state.nextIndex : state.currentIndex;
+  const answer = startsNewAnswer
+    ? item.text
+    : `${state.currentAnswer} ${item.text}`.trim();
 
-  return { state: { ...state, nextIndex: state.nextIndex + 1 }, answer };
+  return {
+    state: {
+      ...state,
+      currentIndex: questionIndex,
+      currentAnswer: answer,
+      nextIndex: startsNewAnswer ? state.nextIndex + 1 : state.nextIndex,
+    },
+    answer: {
+      questionIndex,
+      question: state.pendingQuestion || "Interview question",
+      answer,
+      followUpCount: 0,
+    },
+  };
 }

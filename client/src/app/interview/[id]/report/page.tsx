@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { evaluateInterview } from "@/lib/ai-service";
+import { buildQuestionBreakdown } from "@/lib/interview-report";
 import { toast } from "sonner";
 
 interface Interview {
@@ -104,9 +105,13 @@ export default function InterviewReportPage() {
     setError(null);
 
     try {
-      const qaPairs = answers
-        .sort((a: InterviewAnswer, b: InterviewAnswer) => a.questionIndex - b.questionIndex)
-        .map((a: InterviewAnswer) => ({ question: a.question, answer: a.answer }));
+      const sortedAnswers = [...(answers as InterviewAnswer[])].sort(
+        (a: InterviewAnswer, b: InterviewAnswer) => a.questionIndex - b.questionIndex
+      );
+      const qaPairs = sortedAnswers.map((a: InterviewAnswer) => ({
+        question: a.question,
+        answer: a.answer,
+      }));
 
       const evaluation = await evaluateInterview({
         resume_text: interview.resumeText ?? "",
@@ -114,17 +119,31 @@ export default function InterviewReportPage() {
         qa_pairs: qaPairs,
       });
 
+      // Align the model's scores back onto the real answer indices before
+      // persisting, so the report and review pages render them against the
+      // questions that were actually asked.
+      const questionScores = buildQuestionBreakdown(
+        sortedAnswers,
+        evaluation.question_scores.map((qs) => ({
+          questionIndex: qs.question_index,
+          score: qs.score,
+          feedback: qs.feedback,
+        }))
+      )
+        .filter((item) => item.score !== undefined)
+        .map((item) => ({
+          questionIndex: item.questionIndex,
+          score: item.score as number,
+          feedback: item.feedback ?? "",
+        }));
+
       const reportId = await saveReport({
         interviewId,
         overallScore: evaluation.overall_score,
         strengths: evaluation.strengths,
         weaknesses: evaluation.weaknesses,
         recommendations: evaluation.recommendations,
-        questionScores: evaluation.question_scores.map((qs) => ({
-          questionIndex: qs.question_index,
-          score: qs.score,
-          feedback: qs.feedback,
-        })),
+        questionScores,
       });
 
       const newReport: Report = {
@@ -135,11 +154,7 @@ export default function InterviewReportPage() {
         strengths: evaluation.strengths,
         weaknesses: evaluation.weaknesses,
         recommendations: evaluation.recommendations,
-        questionScores: evaluation.question_scores.map((qs) => ({
-          questionIndex: qs.question_index,
-          score: qs.score,
-          feedback: qs.feedback,
-        })),
+        questionScores,
         createdAt: Date.now(),
       };
 
@@ -173,8 +188,13 @@ export default function InterviewReportPage() {
   }
 
   const questionsList = interview.plan?.questions || [];
-  const totalQuestions = questionsList.length;
   const answeredCount = answers?.length || 0;
+  const totalQuestions = Math.max(questionsList.length, answeredCount);
+  const breakdown = buildQuestionBreakdown(
+    (answers as InterviewAnswer[]) ?? [],
+    report?.questionScores ?? [],
+    questionsList
+  );
 
   const scoreConfig = report ? getScoreColor(report.overallScore) : { color: "text-slate-400", bg: "bg-slate-100 dark:bg-slate-800", label: "Pending" };
 
@@ -374,44 +394,53 @@ export default function InterviewReportPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {report.questionScores
-                        .sort((a, b) => a.questionIndex - b.questionIndex)
-                        .map((qs) => {
-                          const qConfig = getScoreColor(qs.score);
-                          const questionText = questionsList[qs.questionIndex] || `Question ${qs.questionIndex + 1}`;
-                          const userAnswer = answers?.find((a: InterviewAnswer) => a.questionIndex === qs.questionIndex)?.answer || "";
+                      {breakdown.map((item) => {
+                        const hasScore = typeof item.score === "number";
+                        const qConfig = getScoreColor(item.score ?? 0);
 
-                          return (
-                            <div key={qs.questionIndex} className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3.5 space-y-2.5 dark:border-slate-800 dark:bg-slate-950/50">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">
-                                    {questionText}
-                                  </p>
-                                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
-                                    <span className="font-medium text-slate-700 dark:text-slate-300">Answer: </span>
-                                    {userAnswer || "No answer provided"}
-                                  </p>
-                                </div>
-                                <div className="flex flex-col items-end gap-1 shrink-0">
-                                  <span className={`${qConfig.bg} ${qConfig.color} rounded-full px-2 py-0.5 text-xs font-bold`}>
-                                    {qs.score}/100
-                                  </span>
-                                  {getScoreIcon(qs.score)}
-                                </div>
-                              </div>
-                              <Separator className="bg-slate-200 dark:bg-slate-800" />
-                              <div className="flex items-start gap-2">
-                                <Badge variant="outline" className="shrink-0 text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400">
-                                  AI Feedback
-                                </Badge>
-                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                                  {qs.feedback}
+                        return (
+                          <div key={item.questionIndex} className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3.5 space-y-2.5 dark:border-slate-800 dark:bg-slate-950/50">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 sm:text-sm">
+                                  {item.question}
+                                </p>
+                                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2">
+                                  <span className="font-medium text-slate-700 dark:text-slate-300">Answer: </span>
+                                  {item.answer || "No answer provided"}
                                 </p>
                               </div>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                {hasScore ? (
+                                  <>
+                                    <span className={`${qConfig.bg} ${qConfig.color} rounded-full px-2 py-0.5 text-xs font-bold`}>
+                                      {item.score}/100
+                                    </span>
+                                    {getScoreIcon(item.score ?? 0)}
+                                  </>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] uppercase font-semibold text-slate-500 dark:text-slate-400">
+                                    Not scored
+                                  </Badge>
+                                )}
+                              </div>
                             </div>
-                          );
-                        })}
+                            {item.feedback && (
+                              <>
+                                <Separator className="bg-slate-200 dark:bg-slate-800" />
+                                <div className="flex items-start gap-2">
+                                  <Badge variant="outline" className="shrink-0 text-[10px] uppercase font-semibold text-slate-600 dark:text-slate-400">
+                                    AI Feedback
+                                  </Badge>
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                    {item.feedback}
+                                  </p>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </CardContent>
                 </Card>
