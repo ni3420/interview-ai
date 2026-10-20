@@ -89,7 +89,18 @@ export async function dispatchInterviewerAgent(
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(data.error ?? `Agent dispatch failed (${response.status})`);
+    const data = (await response.json().catch(() => ({}))) as {
+      error?: string;
+      detail?: string;
+    };
+    // The AI service returns FastAPI's `detail` (e.g. a missing provider
+    // credential); the Next.js route returns `error` for its own failures.
+    const reason =
+      typeof data.error === "string"
+        ? data.error
+        : typeof data.detail === "string"
+          ? data.detail
+          : `Agent dispatch failed (${response.status})`;
+    throw new Error(reason);
   }
 }

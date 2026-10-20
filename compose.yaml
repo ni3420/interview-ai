@@ -42,6 +42,10 @@ services:
         INSTALL_REALTIME: ${INSTALL_REALTIME:-true}
     restart: unless-stopped
     env_file:
+      # Shared server-only secrets (Stream credentials) live in the root .env.
+      # The service file can override them and add GEMINI_API_KEY.
+      - path: ./.env
+        required: false
       - path: ./apps/ai-service/.env
         required: false
     environment:

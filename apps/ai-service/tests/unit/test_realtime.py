@@ -1,14 +1,21 @@
 import asyncio
+import sys
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
+from app.core.config import settings
 from app.main import app
 from app.realtime.instructions import build_instructions
 from app.realtime.manager import RealtimeAgentManager
-from app.realtime.runner import RealtimeRuntimeUnavailableError
+from app.realtime.runner import (
+    RealtimeRuntimeUnavailableError,
+    _load_runtime,
+    ensure_available,
+    run_agent,
+)
 from app.schemas.realtime import RealtimeJoinRequest, RealtimeJoinResponse
 
 TEST_API_KEY = "dev-secret-key"
@@ -134,6 +141,121 @@ class TestJoinCallEndpoint:
         body = response.json()
         assert body["status"] == "already_running"
         assert body["already_running"] is True
+
+
+class TestRealtimeRunnerConfiguration:
+    """The live interviewer must fail fast with an actionable error."""
+
+    def test_requires_stream_credentials(self, monkeypatch):
+        monkeypatch.setattr(settings, "stream_api_key", "")
+        monkeypatch.setattr(settings, "stream_api_secret", "")
+        monkeypatch.setattr(settings, "gemini_api_key", "")
+
+        with pytest.raises(RealtimeRuntimeUnavailableError, match="STREAM_API_KEY"):
+            ensure_available()
+
+    def test_requires_gemini_api_key(self, monkeypatch):
+        monkeypatch.setattr(settings, "stream_api_key", "stream-key")
+        monkeypatch.setattr(settings, "stream_api_secret", "stream-secret")
+        monkeypatch.setattr(settings, "gemini_api_key", "")
+
+        with pytest.raises(RealtimeRuntimeUnavailableError, match="GEMINI_API_KEY"):
+            ensure_available()
+
+    def test_reports_missing_realtime_dependencies(self, monkeypatch):
+        # `None` in sys.modules makes any import of the package fail, regardless
+        # of whether the realtime extra is installed in the test environment.
+        monkeypatch.setitem(sys.modules, "vision_agents", None)
+
+        with pytest.raises(
+            RealtimeRuntimeUnavailableError, match="dependencies are not installed"
+        ):
+            _load_runtime()
+
+
+class FakeUser:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+class FakeRealtimeLLM:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+class FakeGemini:
+    Realtime = FakeRealtimeLLM
+
+
+class FakeGetstream:
+    class Edge:  # mirrors the real plugin's Edge class
+        pass
+
+
+class FakeJoin:
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *_exc):
+        return False
+
+
+class FakeAgent:
+    """Minimal stand-in for vision_agents.core.Agent."""
+
+    last: "FakeAgent | None" = None
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.responses: list[str] = []
+        self.finished = False
+        self.calls: list[tuple[str, str]] = []
+        FakeAgent.last = self
+
+    async def create_call(self, call_type: str, call_id: str):
+        self.calls.append((call_type, call_id))
+        return {"call_type": call_type, "call_id": call_id}
+
+    def join(self, _call):
+        return FakeJoin()
+
+    async def simple_response(self, text: str) -> None:
+        self.responses.append(text)
+
+    async def finish(self) -> None:
+        self.finished = True
+
+
+class TestRealtimeRunner:
+    @pytest.mark.asyncio
+    async def test_uses_gemini_live_and_waits_for_the_call(self, monkeypatch):
+        monkeypatch.setattr(settings, "stream_api_key", "stream-key")
+        monkeypatch.setattr(settings, "stream_api_secret", "stream-secret")
+        monkeypatch.setattr(settings, "gemini_api_key", "gemini-key")
+        monkeypatch.setattr(settings, "realtime_model", "gemini-live-test")
+
+        with patch(
+            "app.realtime.runner._load_runtime",
+            return_value=(FakeAgent, FakeUser, FakeGemini, FakeGetstream),
+        ):
+            await run_agent(SAMPLE)
+
+        agent = FakeAgent.last
+        assert agent is not None
+
+        # The live interviewer must use the Gemini Live provider, never the
+        # Ollama text provider (which has no realtime implementation).
+        llm = agent.kwargs["llm"]
+        assert isinstance(llm, FakeRealtimeLLM)
+        assert llm.kwargs["model"] == "gemini-live-test"
+        assert llm.kwargs["api_key"] == "gemini-key"
+
+        # Grounded instructions and a single greeting are passed to the agent.
+        assert "Senior Frontend Engineer" in agent.kwargs["instructions"]
+        assert agent.calls == [("default", "interview-abc")]
+        assert agent.responses
+        # finish() blocks until the call ends; it must be awaited in the session.
+        assert agent.finished is True
 
 
 class TestRealtimeAgentManager:

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
+  dispatchInterviewerAgent,
   fetchStreamSession,
   StreamNotConfiguredError,
   type StreamSession,
@@ -89,6 +90,46 @@ describe("fetchStreamSession", () => {
 
     await expect(fetchStreamSession("interview-1")).rejects.toThrow(
       /malformed/i
+    );
+  });
+});
+
+describe("dispatchInterviewerAgent", () => {
+  it("POSTs only the interview id and resolves when the agent starts", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(mockResponse({ body: { status: "started" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      dispatchInterviewerAgent("interview-1")
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stream/agent",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ interviewId: "interview-1" }),
+      })
+    );
+  });
+
+  it("surfaces the AI service detail when the agent is unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        mockResponse({
+          ok: false,
+          status: 503,
+          body: {
+            detail: "Realtime agent is missing required configuration: GEMINI_API_KEY",
+          },
+        })
+      )
+    );
+
+    await expect(dispatchInterviewerAgent("interview-1")).rejects.toThrow(
+      /GEMINI_API_KEY/
     );
   });
 });
