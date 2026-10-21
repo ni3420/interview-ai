@@ -80,9 +80,21 @@ export async function POST(request: NextRequest) {
     // A stable, colon-free job id makes re-submitting the same resume for the
     // same interview idempotent while a job is pending or active. (BullMQ
     // rejects custom ids containing ":".)
-    await queue.add("process-resume", job, {
-      jobId: `${context.interviewId}-${context.resumeId}`,
-    });
+    const jobId = `${context.interviewId}-${context.resumeId}`;
+
+    // BullMQ ignores `add` when a job with this id already exists, and finished
+    // jobs are retained (removeOnComplete/removeOnFail). Clear a terminal job
+    // so an explicit retry actually runs instead of leaving the resume stuck
+    // in "processing". An active/waiting job is left alone on purpose.
+    const existing = await queue.getJob(jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === "failed" || state === "completed") {
+        await existing.remove();
+      }
+    }
+
+    await queue.add("process-resume", job, { jobId });
   } catch (error) {
     console.error("Failed to enqueue resume processing", error);
     await convex

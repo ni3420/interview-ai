@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { config } from "./config";
-import { processResumeJob } from "./processor";
+import { processResumeJob, reportTerminalFailure } from "./processor";
 import { createRedisConnection } from "./redis";
 
 function log(message: string, meta?: Record<string, unknown>): void {
@@ -27,9 +27,17 @@ worker.on("failed", (job, error) => {
       message: "job failed",
       jobId: job?.id,
       attemptsMade: job?.attemptsMade,
+      attempts: job?.opts.attempts,
       error: error.message,
     })
   );
+
+  // Only the terminal failure is reported to Convex, so the UI is not marked
+  // failed while BullMQ still has retries left. This also covers stalls and
+  // jobs interrupted by a worker restart.
+  if (job) {
+    void reportTerminalFailure(job, error);
+  }
 });
 
 worker.on("error", (error) => {

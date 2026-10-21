@@ -542,6 +542,46 @@ describe("Convex - Worker persistence", () => {
       );
     });
 
+    it("restores an interview marked failed by an earlier attempt", async () => {
+      const plan = { questions: ["Q1"], focusAreas: ["React"] };
+      mockCtx.db.get
+        .mockResolvedValueOnce(resume)
+        .mockResolvedValueOnce({ ...mockInterview, status: "failed" });
+
+      const result = await completeResumeProcessing(mockCtx, {
+        resumeId: "resume-1",
+        interviewId: "interview-1",
+        resumeText: "Extracted resume text",
+        chunkCount: 3,
+        plan,
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "interview-1",
+        expect.objectContaining({ status: "setup", plan })
+      );
+    });
+
+    it("does not overwrite an interview that is not failed", async () => {
+      mockCtx.db.get
+        .mockResolvedValueOnce(resume)
+        .mockResolvedValueOnce({ ...mockInterview, status: "in_progress" });
+
+      await completeResumeProcessing(mockCtx, {
+        resumeId: "resume-1",
+        interviewId: "interview-1",
+        resumeText: "text",
+        chunkCount: 3,
+        plan: { questions: ["Q1"], focusAreas: [] },
+      });
+
+      const interviewPatch = mockCtx.db.patch.mock.calls.find(
+        ([id]) => id === "interview-1"
+      );
+      expect(interviewPatch?.[1]).not.toHaveProperty("status");
+    });
+
     it("is a no-op when the referenced documents no longer exist", async () => {
       mockCtx.db.get.mockResolvedValue(null);
 

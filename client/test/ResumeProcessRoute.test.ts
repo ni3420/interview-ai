@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   mutation: vi.fn(),
   queueAdd: vi.fn(),
+  queueGetJob: vi.fn(),
+  queueRemove: vi.fn(),
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({ auth: mocks.auth }));
@@ -25,7 +27,13 @@ vi.mock("convex/browser", () => ({
 // kept real so the contract test also exercises it.
 vi.mock("@/lib/resume-queue", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/resume-queue")>();
-  return { ...actual, getResumeQueue: () => ({ add: mocks.queueAdd }) };
+  return {
+    ...actual,
+    getResumeQueue: () => ({
+      add: mocks.queueAdd,
+      getJob: mocks.queueGetJob,
+    }),
+  };
 });
 
 type RouteHandler = (request: unknown) => Promise<Response>;
@@ -34,6 +42,13 @@ let POST: RouteHandler;
 
 function jsonRequest(body: unknown) {
   return { json: async () => body };
+}
+
+function existingJob(state: string) {
+  return {
+    getState: vi.fn().mockResolvedValue(state),
+    remove: mocks.queueRemove,
+  };
 }
 
 const context = {
@@ -58,6 +73,8 @@ beforeEach(() => {
   mocks.query.mockResolvedValue(context);
   mocks.mutation.mockResolvedValue({ success: true });
   mocks.queueAdd.mockResolvedValue({ id: "resume:resume-1" });
+  mocks.queueGetJob.mockResolvedValue(null);
+  mocks.queueRemove.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -113,6 +130,40 @@ describe("POST /api/resume/process", () => {
       jobDescription: context.jobDescription,
     });
     expect(options).toEqual({ jobId: "interview-1-resume-1" });
+  });
+
+  it("clears a terminally failed job so a retry re-enqueues", async () => {
+    mocks.queueGetJob.mockResolvedValue(existingJob("failed"));
+
+    const response = await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(response.status).toBe(202);
+    expect(mocks.queueRemove).toHaveBeenCalledOnce();
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      "process-resume",
+      expect.anything(),
+      { jobId: "interview-1-resume-1" }
+    );
+  });
+
+  it("re-runs a previously completed job", async () => {
+    mocks.queueGetJob.mockResolvedValue(existingJob("completed"));
+
+    const response = await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(response.status).toBe(202);
+    expect(mocks.queueRemove).toHaveBeenCalledOnce();
+    expect(mocks.queueAdd).toHaveBeenCalledOnce();
+  });
+
+  it("leaves an in-flight job in place", async () => {
+    mocks.queueGetJob.mockResolvedValue(existingJob("active"));
+
+    const response = await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(response.status).toBe(202);
+    expect(mocks.queueRemove).not.toHaveBeenCalled();
+    expect(mocks.queueAdd).toHaveBeenCalledOnce();
   });
 
   it("marks the resume failed when enqueueing fails", async () => {

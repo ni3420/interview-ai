@@ -39,6 +39,9 @@ export const completeResumeProcessing = internalMutation({
         await ctx.db.patch(args.interviewId, {
           resumeText: args.resumeText,
           plan: args.plan,
+          // A successful retry must clear a failure recorded by an earlier
+          // terminal attempt, otherwise the interview stays "failed" forever.
+          ...(interview.status === "failed" ? { status: "setup" as const } : {}),
           updatedAt: now,
         });
       }

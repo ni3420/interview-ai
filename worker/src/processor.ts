@@ -43,7 +43,8 @@ interface RetrieveResponse {
 function postJson<TResponse>(
   url: string,
   body: unknown,
-  headers: Record<string, string>
+  headers: Record<string, string>,
+  timeoutMs: number = config.aiRequestTimeoutMs
 ): Promise<TResponse> {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
@@ -90,9 +91,9 @@ function postJson<TResponse>(
     // healthy generation is never cut off early.
     const timer = setTimeout(() => {
       request.destroy(
-        new Error(`Request to ${url} timed out after ${config.aiRequestTimeoutMs}ms`)
+        new Error(`Request to ${url} timed out after ${timeoutMs}ms`)
       );
-    }, config.aiRequestTimeoutMs);
+    }, timeoutMs);
 
     request.on("error", (error) => {
       clearTimeout(timer);
@@ -105,25 +106,78 @@ function postJson<TResponse>(
   });
 }
 
+/** States BullMQ uses when another attempt is still scheduled. */
+const RETRY_STATES = new Set(["delayed", "waiting", "prioritized", "waiting-children"]);
+
+type FailureProbe = Pick<Job, "getState" | "attemptsMade" | "opts">;
+
 /**
- * Tells Convex a job failed so the lobby shows an actionable error instead of
- * waiting on progress that will never arrive. Best-effort: a failure here must
- * not mask the original error.
+ * Decides whether a failed job is finished for good.
+ *
+ * Ask the queue for the job's post-failure state instead of inferring it from
+ * the error message or attempt counters. `getState()` is authoritative for
+ * every failure mode: exhausted retries, stalled jobs, and jobs interrupted by
+ * a worker restart (which never run the processor at all). A job that is
+ * waiting/delayed has another attempt scheduled; anything else (failed, or
+ * already removed by `removeOnFail`) is terminal.
+ *
+ * Falls back to attempt accounting only if Redis cannot answer, so a queue
+ * outage cannot silence a real failure report.
  */
-async function reportFailure(job: Job, payload: ResumeJob, error: unknown): Promise<void> {
+export async function isTerminalFailure(job: FailureProbe): Promise<boolean> {
+  try {
+    const state = await job.getState();
+    return !RETRY_STATES.has(state);
+  } catch {
+    return job.attemptsMade >= (job.opts.attempts ?? 1);
+  }
+}
+
+/**
+ * Tells Convex that a resume job has terminally failed so the lobby shows an
+ * actionable error instead of waiting on progress that will never arrive.
+ *
+ * Called from the BullMQ `failed` event rather than the processor: that event
+ * also fires for stalled jobs and jobs interrupted by a worker restart, which
+ * never reach the processor's own error handling.
+ *
+ * Intermediate attempts are deliberately not reported. BullMQ is still going
+ * to retry them, and flipping the resume to "failed" while a retry is pending
+ * would be misleading (and races with a later success).
+ */
+export async function reportTerminalFailure(
+  job: Job,
+  error: unknown
+): Promise<void> {
+  if (!(await isTerminalFailure(job))) {
+    return;
+  }
+
   if (!config.convexSiteUrl || !config.workerServiceKey) return;
+
+  const payload = resumeJobSchema.safeParse(job.data);
+  if (!payload.success) {
+    await job
+      .log("cannot report failure: invalid job payload")
+      .catch(() => undefined);
+    return;
+  }
+
   try {
     await postJson<{ success: boolean }>(
       `${config.convexSiteUrl}/worker/resume-failed`,
       {
-        resumeId: payload.resumeId,
-        interviewId: payload.interviewId,
+        resumeId: payload.data.resumeId,
+        interviewId: payload.data.interviewId,
         error: error instanceof Error ? error.message : String(error),
       },
-      { "X-Worker-Key": config.workerServiceKey }
+      { "X-Worker-Key": config.workerServiceKey },
+      10_000
     );
   } catch (reportError) {
-    job.log(`failed to report failure: ${String(reportError)}`);
+    await job
+      .log(`failed to report failure: ${String(reportError)}`)
+      .catch(() => undefined);
   }
 }
 
@@ -224,7 +278,15 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
       questionCount: plan.questions.length,
     };
   } catch (error) {
-    await reportFailure(job, payload, error);
+    // Log every attempt, but let BullMQ decide whether it is terminal. The
+    // worker's `failed` handler reports terminal failures to Convex.
+    await job
+      .log(
+        `attempt ${job.attemptsStarted}/${job.opts.attempts ?? 1} failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+      .catch(() => undefined);
     throw error;
   }
 }
