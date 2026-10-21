@@ -2,6 +2,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 
 from app.api.deps import verify_api_key
 from app.core.config import settings
@@ -49,14 +50,21 @@ async def process_resume(request: ResumeProcessRequest) -> ResumeProcessResponse
     """Extract, chunk, embed and index a resume into Qdrant."""
     try:
         data = await download_pdf(str(request.file_url))
-        text = extract_text_from_pdf(data)
-        chunks = chunk_text(text)
+        # PDF parsing, chunking and embedding/indexing are blocking CPU and IO
+        # work. Running them inline in this `async def` would stall the event
+        # loop (health checks, retrieval and other jobs) for the whole
+        # embedding call, so they run in the worker threadpool instead.
+        text = await run_in_threadpool(extract_text_from_pdf, data)
+        chunks = await run_in_threadpool(chunk_text, text)
         if not chunks:
             raise HTTPException(
                 status_code=422, detail="Resume did not contain usable text"
             )
-        chunk_count = vector_store.index_resume(
-            request.user_id, request.resume_id, chunks
+        chunk_count = await run_in_threadpool(
+            vector_store.index_resume,
+            request.user_id,
+            request.resume_id,
+            chunks,
         )
     except ResumeExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -90,8 +98,14 @@ async def retrieve_resume_context(
 ) -> ResumeRetrieveResponse:
     """Semantic retrieval filtered to the authorized user and resume."""
     try:
-        results = vector_store.search_resume(
-            request.user_id, request.resume_id, request.query, request.limit
+        # Similarity search embeds the query synchronously; keep it off the
+        # event loop for the same reason as indexing above.
+        results = await run_in_threadpool(
+            vector_store.search_resume,
+            request.user_id,
+            request.resume_id,
+            request.query,
+            request.limit,
         )
     except vector_store.VectorStoreConfigError as exc:
         logging.error("Vector store configuration error", exc_info=True)

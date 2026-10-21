@@ -1,6 +1,9 @@
+import asyncio
+import time
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import ASGITransport, AsyncClient
-from unittest.mock import AsyncMock, patch
 
 from app.main import app
 from app.services.resume_extraction import ResumeExtractionError
@@ -56,6 +59,51 @@ class TestProcessResume:
         assert data["embedding_model"]
         assert data["embedding_dimension"] > 0
         mock_index.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_process_keeps_event_loop_responsive(self):
+        """Blocking extraction/indexing must not stall unrelated coroutines."""
+        ticks = 0
+        ticks_when_index_finished: list[int] = []
+
+        def slow_index(*_args, **_kwargs):
+            # Runs in the threadpool; a blocked event loop would leave `ticks`
+            # at zero when this returns.
+            time.sleep(0.15)
+            ticks_when_index_finished.append(ticks)
+            return 1
+
+        async def ticker(stop: asyncio.Event) -> None:
+            nonlocal ticks
+            while not stop.is_set():
+                ticks += 1
+                await asyncio.sleep(0.005)
+
+        with (
+            patch(
+                "app.api.v1.resumes.download_pdf", new_callable=AsyncMock
+            ) as mock_download,
+            patch(
+                "app.api.v1.resumes.extract_text_from_pdf", return_value="resume text"
+            ),
+            patch(
+                "app.api.v1.resumes.vector_store.index_resume", side_effect=slow_index
+            ),
+        ):
+            mock_download.return_value = b"%PDF-1.4 fake"
+            stop = asyncio.Event()
+            ticker_task = asyncio.create_task(ticker(stop))
+            try:
+                response = await _post("/v1/resumes/process", VALID_BODY)
+            finally:
+                stop.set()
+                await ticker_task
+
+        assert response.status_code == 200
+        assert ticks_when_index_finished
+        # ~30 ticks are expected during 150 ms of indexing; a blocked loop
+        # would record 0.
+        assert ticks_when_index_finished[0] >= 3
 
     @pytest.mark.asyncio
     async def test_process_extraction_failure_is_422(self):
