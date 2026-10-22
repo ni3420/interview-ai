@@ -55,9 +55,11 @@ services:
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-resume_chunks}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
       # Local development uses Ollama (no cloud key required). Set
       # AI_PROVIDER=gemini plus GEMINI_API_KEY to use the remote provider.
       AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-ollama}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
       # Realtime vision agent. Secrets (STREAM_API_KEY, STREAM_API_SECRET,
       # GEMINI_API_KEY) come from env_file above; only non-secret overrides go
@@ -84,6 +86,7 @@ services:
       CONVEX_SITE_URL: ${CONVEX_SITE_URL:-http://host.docker.internal:3211}
       WORKER_SERVICE_KEY: ${WORKER_SERVICE_KEY:-}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      REPORT_WORKER_CONCURRENCY: ${REPORT_WORKER_CONCURRENCY:-1}
     # Lets the container persist results back to the host's Convex backend.
     extra_hosts:
       - "host.docker.internal:host-gateway"

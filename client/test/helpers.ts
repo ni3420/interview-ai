@@ -11,6 +11,8 @@ export const createMockCtx = () => {
     order: vi.fn().mockReturnThis(),
     collect: vi.fn(),
     unique: vi.fn(),
+    first: vi.fn(),
+    take: vi.fn(),
   };
 
   return {
@@ -61,4 +63,13 @@ export const mockReport = {
     { questionIndex: 0, score: 90, feedback: "Great answer" },
   ],
   createdAt: Date.now(),
+};
+
+export const mockReportJob = {
+  _id: "report-job-1",
+  interviewId: "interview-1",
+  userId: mockAuthUserId,
+  status: "queued" as const,
+  createdAt: Date.now(),
+  updatedAt: Date.now(),
 };

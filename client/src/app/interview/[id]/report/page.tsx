@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { ArrowLeft, CheckCircle2, AlertCircle, Lightbulb, Award, TrendingUp, Loader2, RefreshCw } from "lucide-react";
 import Link from "next/link";
@@ -10,9 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { evaluateInterview } from "@/lib/ai-service";
 import { buildQuestionBreakdown } from "@/lib/interview-report";
-import { toast } from "sonner";
 
 interface Interview {
   _id: string;
@@ -54,6 +52,18 @@ interface Report {
   createdAt: number;
 }
 
+interface ReportJob {
+  _id: string;
+  interviewId: string;
+  userId: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  error?: string;
+  startedAt?: number;
+  completedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleDateString("en-US", {
     year: "numeric",
@@ -79,102 +89,95 @@ export default function InterviewReportPage() {
   const interviewId = params.id as string;
 
   const interview = useQuery(api.interviews.getInterview, { interviewId }) as Interview | undefined;
-  const answers = useQuery(api.answers.getAnswers, { interviewId });
-  const existingReport = useQuery(api.reports.getReport, { interviewId }) as Report | undefined;
-  const saveReport = useMutation(api.reports.saveReport);
+  const answers = useQuery(api.answers.getAnswers, { interviewId }) as
+    | InterviewAnswer[]
+    | undefined;
+  const existingReport = useQuery(api.reports.getReport, { interviewId }) as
+    | Report
+    | null
+    | undefined;
+  const reportJob = useQuery(api.reports.getReportJob, { interviewId }) as
+    | ReportJob
+    | null
+    | undefined;
 
-  const [report, setReport] = useState<Report | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const autoRequestedRef = useRef(false);
 
-  const hasTriggeredRef = useRef(false);
+  const report = existingReport ?? null;
+  const jobGenerating =
+    reportJob?.status === "queued" || reportJob?.status === "processing";
+  const awaitingReport = reportJob?.status === "completed" && !report;
+  const isGenerating = isRequesting || jobGenerating || awaitingReport;
+  const error =
+    reportJob?.status === "failed"
+      ? reportJob.error ?? "Report generation failed"
+      : requestError;
 
-  useEffect(() => {
-    if (existingReport) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setReport(existingReport);
-      setIsGenerating(false);
-    }
-  }, [existingReport]);
-
-  const generateReport = useCallback(async () => {
-    if (!interview || !answers || answers.length === 0 || hasTriggeredRef.current || existingReport) return;
-
-    hasTriggeredRef.current = true;
-    setIsGenerating(true);
-    setError(null);
+  const requestReport = useCallback(async () => {
+    setIsRequesting(true);
+    setRequestError(null);
 
     try {
-      const sortedAnswers = [...(answers as InterviewAnswer[])].sort(
-        (a: InterviewAnswer, b: InterviewAnswer) => a.questionIndex - b.questionIndex
-      );
-      const qaPairs = sortedAnswers.map((a: InterviewAnswer) => ({
-        question: a.question,
-        answer: a.answer,
-      }));
-
-      const evaluation = await evaluateInterview({
-        resume_text: interview.resumeText ?? "",
-        job_description: interview.jobDescription,
-        qa_pairs: qaPairs,
+      const response = await fetch("/api/report/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ interviewId }),
       });
 
-      // Align the model's scores back onto the real answer indices before
-      // persisting, so the report and review pages render them against the
-      // questions that were actually asked.
-      const questionScores = buildQuestionBreakdown(
-        sortedAnswers,
-        evaluation.question_scores.map((qs) => ({
-          questionIndex: qs.question_index,
-          score: qs.score,
-          feedback: qs.feedback,
-        }))
-      )
-        .filter((item) => item.score !== undefined)
-        .map((item) => ({
-          questionIndex: item.questionIndex,
-          score: item.score as number,
-          feedback: item.feedback ?? "",
-        }));
-
-      const reportId = await saveReport({
-        interviewId,
-        overallScore: evaluation.overall_score,
-        strengths: evaluation.strengths,
-        weaknesses: evaluation.weaknesses,
-        recommendations: evaluation.recommendations,
-        questionScores,
-      });
-
-      const newReport: Report = {
-        _id: reportId as string,
-        interviewId,
-        userId: interview.userId,
-        overallScore: evaluation.overall_score,
-        strengths: evaluation.strengths,
-        weaknesses: evaluation.weaknesses,
-        recommendations: evaluation.recommendations,
-        questionScores,
-        createdAt: Date.now(),
-      };
-
-      setReport(newReport);
-      toast.success("Report generated successfully!");
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(
+          body?.error ?? `Report request failed (${response.status})`
+        );
+      }
     } catch (err) {
-      console.error("Report generation failed:", err);
-      hasTriggeredRef.current = false;
-      setError(err instanceof Error ? err.message : "Failed to generate report");
-      toast.error("Failed to generate report. You can retry.");
+      setRequestError(
+        err instanceof Error ? err.message : "Failed to start report generation"
+      );
     } finally {
-      setIsGenerating(false);
+      setIsRequesting(false);
     }
-  }, [interview, answers, existingReport, interviewId, saveReport]);
+  }, [interviewId]);
 
+  const retry = useCallback(() => {
+    autoRequestedRef.current = true;
+    void requestReport();
+  }, [requestReport]);
+
+  // Start generation once, after the Convex queries have resolved. Failed jobs
+  // deliberately wait for the user to press Retry instead of retrying in a loop.
   useEffect(() => {
-    if (interview && answers && answers.length > 0 && !existingReport && !report && !hasTriggeredRef.current) {
-      generateReport();
+    if (
+      !interview ||
+      answers === undefined ||
+      existingReport === undefined ||
+      reportJob === undefined
+    ) {
+      return;
     }
-  }, [interview, answers, existingReport, report, generateReport]);
+    if (existingReport || answers.length === 0 || reportJob) return;
+    if (autoRequestedRef.current) return;
+
+    autoRequestedRef.current = true;
+    void requestReport();
+  }, [interview, answers, existingReport, reportJob, requestReport]);
+
+  // If the process died between the Convex mutation and Redis, the job stays
+  // queued without a worker. Re-submitting is safe: Convex only asks for a new
+  // enqueue once the job is stale, and BullMQ deduplicates on the stable job id.
+  useEffect(() => {
+    if (reportJob?.status !== "queued") return;
+
+    const timer = setInterval(() => {
+      void requestReport();
+    }, 60_000);
+
+    return () => clearInterval(timer);
+  }, [reportJob?.status, requestReport]);
 
   if (!interview) {
     return (
@@ -209,6 +212,10 @@ export default function InterviewReportPage() {
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 max-w-xs">
             Evaluating your responses against the target job description...
           </p>
+          <p className="mt-3 text-[11px] text-slate-400 dark:text-slate-500 max-w-xs">
+            This runs in the background and can take several minutes with local models.
+            You can leave this page and come back.
+          </p>
         </div>
       </div>
     );
@@ -222,7 +229,7 @@ export default function InterviewReportPage() {
         </div>
         <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Failed to Generate Report</h1>
         <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{error}</p>
-        <Button onClick={() => { hasTriggeredRef.current = false; generateReport(); }} className="mt-6 gap-2">
+        <Button onClick={retry} className="mt-6 gap-2">
           <RefreshCw className="h-4 w-4" />
           Retry Generation
         </Button>

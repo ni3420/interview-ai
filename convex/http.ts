@@ -100,4 +100,181 @@ http.route({
   }),
 });
 
+http.route({
+  path: "/worker/report-context",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!isAuthorizedWorker(request)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    const interviewId = optionalId(body.interviewId);
+    if (!interviewId) {
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    try {
+      const context = await ctx.runQuery(internal.worker.getReportContext, {
+        interviewId: interviewId as never,
+      });
+      if (!context) return new Response("Not found", { status: 404 });
+      return jsonResponse(context);
+    } catch (error) {
+      console.error("worker/report-context rejected", error);
+      return new Response("Invalid payload", { status: 400 });
+    }
+  }),
+});
+
+http.route({
+  path: "/worker/report-start",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!isAuthorizedWorker(request)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    const interviewId = optionalId(body.interviewId);
+    if (!interviewId) {
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    try {
+      await ctx.runMutation(internal.worker.startReportJob, {
+        interviewId: interviewId as never,
+      });
+    } catch (error) {
+      console.error("worker/report-start rejected", error);
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    return jsonResponse({ success: true });
+  }),
+});
+
+http.route({
+  path: "/worker/report-complete",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!isAuthorizedWorker(request)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return new Response("Invalid JSON", { status: 400 });
+    }
+
+    const interviewId = optionalId(body.interviewId);
+    const strengths = asStringArray(body.strengths);
+    const weaknesses = asStringArray(body.weaknesses);
+    const recommendations = asStringArray(body.recommendations);
+    const rawScores = body.questionScores;
+
+    if (
+      !interviewId ||
+      typeof body.overallScore !== "number" ||
+      !strengths ||
+      strengths.length === 0 ||
+      !weaknesses ||
+      weaknesses.length === 0 ||
+      !recommendations ||
+      recommendations.length === 0 ||
+      !Array.isArray(rawScores)
+    ) {
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    const questionScores: Array<{
+      questionIndex: number;
+      score: number;
+      feedback: string;
+    }> = [];
+    for (const raw of rawScores) {
+      if (!raw || typeof raw !== "object") {
+        return new Response("Invalid payload", { status: 400 });
+      }
+      const score = raw as Record<string, unknown>;
+      if (
+        typeof score.questionIndex !== "number" ||
+        typeof score.score !== "number" ||
+        typeof score.feedback !== "string"
+      ) {
+        return new Response("Invalid payload", { status: 400 });
+      }
+      questionScores.push({
+        questionIndex: score.questionIndex,
+        score: score.score,
+        feedback: score.feedback,
+      });
+    }
+
+    try {
+      await ctx.runMutation(internal.worker.completeReportJob, {
+        interviewId: interviewId as never,
+        overallScore: body.overallScore,
+        strengths,
+        weaknesses,
+        recommendations,
+        questionScores,
+      });
+    } catch (error) {
+      console.error("worker/report-complete rejected", error);
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    return jsonResponse({ success: true });
+  }),
+});
+
+http.route({
+  path: "/worker/report-failed",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!isAuthorizedWorker(request)) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      // An empty body is acceptable; we still mark the job failed.
+    }
+
+    const interviewId = optionalId(body.interviewId);
+    if (!interviewId) {
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    try {
+      await ctx.runMutation(internal.worker.failReportJob, {
+        interviewId: interviewId as never,
+        error: typeof body.error === "string" ? body.error : undefined,
+      });
+    } catch (error) {
+      console.error("worker/report-failed rejected", error);
+      return new Response("Invalid payload", { status: 400 });
+    }
+
+    return jsonResponse({ success: true });
+  }),
+});
+
 export default http;

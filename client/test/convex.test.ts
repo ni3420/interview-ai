@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createMockCtx, mockAuthUserId, mockInterview, mockAnswers, mockReport } from "./helpers";
+import { createMockCtx, mockAuthUserId, mockInterview, mockAnswers, mockReport, mockReportJob } from "./helpers";
 
 vi.mock("../../convex/auth", () => ({
   requireAuthUserId: vi.fn().mockResolvedValue(mockAuthUserId),
@@ -35,6 +35,11 @@ const incrementQuestionIndex = unwrap<Promise<unknown>>(
 const saveReport = unwrap<Promise<unknown>>(Reports.saveReport);
 const getReport = unwrap<Promise<unknown>>(Reports.getReport);
 const getUserReports = unwrap<Promise<unknown>>(Reports.getUserReports);
+const requestReport = unwrap<Promise<unknown>>(Reports.requestReport);
+const getReportJob = unwrap<Promise<unknown>>(Reports.getReportJob);
+const markReportJobFailed = unwrap<Promise<unknown>>(
+  Reports.markReportJobFailed
+);
 
 const getProcessingContext = unwrap<Promise<unknown>>(
   Resume.getProcessingContext
@@ -47,6 +52,10 @@ const completeResumeProcessing = unwrap<Promise<unknown>>(
 const failResumeProcessing = unwrap<Promise<unknown>>(
   Worker.failResumeProcessing
 );
+const startReportJob = unwrap<Promise<unknown>>(Worker.startReportJob);
+const getReportContext = unwrap<Promise<unknown>>(Worker.getReportContext);
+const completeReportJob = unwrap<Promise<unknown>>(Worker.completeReportJob);
+const failReportJob = unwrap<Promise<unknown>>(Worker.failReportJob);
 
 describe("Convex - Interviews", () => {
   let mockCtx: ReturnType<typeof createMockCtx>;
@@ -635,6 +644,291 @@ describe("Convex - Worker persistence", () => {
       expect(mockCtx.db.patch).toHaveBeenCalledWith(
         "resume-1",
         expect.objectContaining({ status: "failed" })
+      );
+    });
+  });
+});
+
+describe("Convex - Report jobs", () => {
+  let mockCtx: ReturnType<typeof createMockCtx>;
+
+  beforeEach(() => {
+    mockCtx = createMockCtx();
+    vi.clearAllMocks();
+    mockCtx.db.get.mockResolvedValue(mockInterview);
+    mockCtx.db.patch.mockResolvedValue(undefined);
+  });
+
+  describe("requestReport", () => {
+    it("creates a queued job when none exists", async () => {
+      mockCtx.db.unique
+        .mockResolvedValueOnce(null) // no existing report
+        .mockResolvedValueOnce(null); // no existing job
+      mockCtx.db.first.mockResolvedValueOnce(mockAnswers[0]);
+      mockCtx.db.insert.mockResolvedValue("report-job-1");
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "queued", shouldEnqueue: true });
+      expect(mockCtx.db.insert).toHaveBeenCalledWith(
+        "reportJobs",
+        expect.objectContaining({
+          interviewId: "interview-1",
+          userId: mockAuthUserId,
+          status: "queued",
+        })
+      );
+    });
+
+    it("returns completed without enqueueing when a report exists", async () => {
+      mockCtx.db.unique.mockResolvedValueOnce(mockReport);
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "completed", shouldEnqueue: false });
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
+    });
+
+    it("returns no_answers for an interview without answers", async () => {
+      mockCtx.db.unique.mockResolvedValueOnce(null);
+      mockCtx.db.first.mockResolvedValueOnce(null);
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "no_answers", shouldEnqueue: false });
+    });
+
+    it("reuses an active job", async () => {
+      mockCtx.db.unique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...mockReportJob,
+          status: "processing",
+          updatedAt: Date.now(),
+        });
+      mockCtx.db.first.mockResolvedValueOnce(mockAnswers[0]);
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "processing", shouldEnqueue: false });
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
+    });
+
+    it("re-enqueues a failed job", async () => {
+      mockCtx.db.unique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ ...mockReportJob, status: "failed" });
+      mockCtx.db.first.mockResolvedValueOnce(mockAnswers[0]);
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "queued", shouldEnqueue: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "report-job-1",
+        expect.objectContaining({ status: "queued", error: undefined })
+      );
+    });
+
+    it("re-enqueues a stale queued job", async () => {
+      mockCtx.db.unique
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({
+          ...mockReportJob,
+          status: "queued",
+          updatedAt: Date.now() - 5 * 60 * 1000,
+        });
+      mockCtx.db.first.mockResolvedValueOnce(mockAnswers[0]);
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "queued", shouldEnqueue: true });
+    });
+
+    it("returns not_found for another user's interview", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...mockInterview,
+        userId: "other-user",
+      });
+
+      const result = await requestReport(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ status: "not_found", shouldEnqueue: false });
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("getReportJob", () => {
+    it("returns the job for the owner", async () => {
+      mockCtx.db.unique.mockResolvedValueOnce(mockReportJob);
+
+      const result = await getReportJob(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual(mockReportJob);
+    });
+
+    it("returns null for another user", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...mockInterview,
+        userId: "other-user",
+      });
+
+      const result = await getReportJob(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("markReportJobFailed", () => {
+    it("marks the job failed", async () => {
+      mockCtx.db.unique.mockResolvedValueOnce(mockReportJob);
+
+      const result = await markReportJobFailed(mockCtx, {
+        interviewId: "interview-1",
+        error: "enqueue failed",
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "report-job-1",
+        expect.objectContaining({ status: "failed", error: "enqueue failed" })
+      );
+    });
+  });
+
+  describe("startReportJob", () => {
+    it("marks the job processing", async () => {
+      mockCtx.db.unique.mockResolvedValueOnce(mockReportJob);
+
+      const result = await startReportJob(mockCtx, {
+        interviewId: "interview-1",
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "report-job-1",
+        expect.objectContaining({ status: "processing" })
+      );
+    });
+  });
+
+  describe("getReportContext", () => {
+    it("returns the interview and ordered answers", async () => {
+      mockCtx.db.collect.mockResolvedValueOnce(mockAnswers);
+
+      const result = (await getReportContext(mockCtx, {
+        interviewId: "interview-1",
+      })) as {
+        resumeText: string;
+        jobDescription: string;
+        qaPairs: Array<{ questionIndex: number; question: string; answer: string }>;
+      };
+
+      expect(result.resumeText).toBe("Test resume");
+      expect(result.jobDescription).toBe("Test JD");
+      expect(result.qaPairs).toEqual([
+        {
+          questionIndex: 0,
+          question: "Test question",
+          answer: "Test answer",
+        },
+      ]);
+    });
+
+    it("sorts answers by question index, not creation order", async () => {
+      mockCtx.db.collect.mockResolvedValueOnce([
+        { ...mockAnswers[0], questionIndex: 4, question: "Q4" },
+        { ...mockAnswers[0], questionIndex: 1, question: "Q1" },
+      ]);
+
+      const result = (await getReportContext(mockCtx, {
+        interviewId: "interview-1",
+      })) as {
+        qaPairs: Array<{ questionIndex: number; question: string }>;
+      };
+
+      expect(result.qaPairs.map((pair) => pair.questionIndex)).toEqual([1, 4]);
+    });
+  });
+
+  describe("completeReportJob", () => {
+    it("persists the report and completes the job", async () => {
+      mockCtx.db.unique
+        .mockResolvedValueOnce(null) // no existing report
+        .mockResolvedValueOnce(mockReportJob);
+      mockCtx.db.insert.mockResolvedValue("report-1");
+
+      const result = await completeReportJob(mockCtx, {
+        interviewId: "interview-1",
+        overallScore: 82,
+        strengths: ["Strength"],
+        weaknesses: ["Weakness"],
+        recommendations: ["Recommendation"],
+        questionScores: [{ questionIndex: 0, score: 90, feedback: "Great" }],
+      });
+
+      expect(result).toEqual({ success: true, reportId: "report-1" });
+      expect(mockCtx.db.insert).toHaveBeenCalledWith(
+        "reports",
+        expect.objectContaining({
+          interviewId: "interview-1",
+          userId: mockAuthUserId,
+          overallScore: 82,
+        })
+      );
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "report-job-1",
+        expect.objectContaining({ status: "completed" })
+      );
+    });
+
+    it("rejects an out-of-range score", async () => {
+      await expect(
+        completeReportJob(mockCtx, {
+          interviewId: "interview-1",
+          overallScore: 101,
+          strengths: ["Strength"],
+          weaknesses: ["Weakness"],
+          recommendations: ["Recommendation"],
+          questionScores: [],
+        })
+      ).rejects.toThrow("Invalid overall score");
+    });
+  });
+
+  describe("failReportJob", () => {
+    it("marks the job failed", async () => {
+      mockCtx.db.unique.mockResolvedValueOnce(mockReportJob);
+
+      const result = await failReportJob(mockCtx, {
+        interviewId: "interview-1",
+        error: "model unavailable",
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "report-job-1",
+        expect.objectContaining({
+          status: "failed",
+          error: "model unavailable",
+        })
       );
     });
   });

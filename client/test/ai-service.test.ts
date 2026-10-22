@@ -105,5 +105,26 @@ describe("AI Service Client", () => {
         ],
       });
     });
+
+    it("surfaces the proxy error detail", async () => {
+      server.use(
+        http.post("http://localhost:8000/v1/interviews/evaluate", () => {
+          return HttpResponse.json(
+            { error: "AI service timed out" },
+            { status: 504 }
+          );
+        })
+      );
+
+      await expect(
+        evaluateInterview({
+          resume_text: "Test resume",
+          job_description: "Test JD",
+          qa_pairs: [{ question: "Q1", answer: "A1" }],
+        })
+      ).rejects.toThrow(
+        "AI service request failed (504): AI service timed out"
+      );
+    });
   });
 });

@@ -22,6 +22,9 @@ export const config = {
   /** Queue consumed by this worker. */
   queueName: env("RESUME_QUEUE_NAME", "resume-processing"),
 
+  /** Queue for asynchronous interview report generation. */
+  reportQueueName: env("REPORT_QUEUE_NAME", "report-evaluation"),
+
   /** Python AI service. */
   aiServiceUrl: env("AI_SERVICE_URL", "http://localhost:8000").replace(/\/$/, ""),
   aiServiceApiKey: env("AI_SERVICE_API_KEY"),
@@ -36,5 +39,12 @@ export const config = {
    */
   aiRequestTimeoutMs: intEnv("AI_REQUEST_TIMEOUT_MS", 900_000),
 
+  /** Report evaluation can produce more output than a plan; keep a budget. */
+  reportAiRequestTimeoutMs: intEnv("REPORT_AI_REQUEST_TIMEOUT_MS", 900_000),
+
   workerConcurrency: intEnv("WORKER_CONCURRENCY", 2),
+
+  // Report evaluations are CPU-heavy. Process one at a time by default so two
+  // local-model runs do not starve each other.
+  reportWorkerConcurrency: intEnv("REPORT_WORKER_CONCURRENCY", 1),
 } as const;

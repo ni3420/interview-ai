@@ -79,7 +79,15 @@ async function postJson<TResponse>(
   });
 
   if (!response.ok) {
-    throw new Error(`AI service request failed (${response.status})`);
+    // Forward the proxy's message (for example a timeout) so the UI can show a
+    // useful error instead of only the status code.
+    const detail = await response
+      .json()
+      .then((body: { error?: unknown } | null) =>
+        typeof body?.error === "string" ? `: ${body.error}` : ""
+      )
+      .catch(() => "");
+    throw new Error(`AI service request failed (${response.status})${detail}`);
   }
 
   return response.json() as Promise<TResponse>;

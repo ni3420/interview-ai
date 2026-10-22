@@ -12,6 +12,30 @@ class OllamaProvider:
     only contacted when this provider is actually invoked.
     """
 
+    async def is_available(self) -> bool:
+        """Whether Ollama is reachable and the configured model is installed.
+
+        Used before switching away from a failing primary provider, so an
+        unreachable or model-less Ollama never hides the original error.
+        """
+        try:
+            async with httpx.AsyncClient(
+                base_url=settings.ollama_base_url, timeout=3.0
+            ) as client:
+                response = await client.get("/api/tags")
+                response.raise_for_status()
+                models = {
+                    str(model.get("name", ""))
+                    for model in response.json().get("models", [])
+                }
+        except Exception:
+            return False
+
+        return (
+            settings.ollama_model in models
+            or f"{settings.ollama_model}:latest" in models
+        )
+
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),

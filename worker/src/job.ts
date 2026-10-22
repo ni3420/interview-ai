@@ -24,3 +24,18 @@ export type ResumeJob = z.infer<typeof resumeJobSchema>;
 
 /** Name of the BullMQ queue shared by producer and consumer. */
 export const RESUME_QUEUE_NAME = "resume-processing";
+
+/**
+ * Cross-service job contract for asynchronous interview evaluation.
+ *
+ * Only the interview id travels through Redis. The worker fetches the resume
+ * text and answers from Convex over the authenticated HTTP bridge.
+ */
+export const reportJobSchema = z.object({
+  /** Convex `interviews` document id. */
+  interviewId: z.string().min(1),
+});
+
+export type ReportJob = z.infer<typeof reportJobSchema>;
+
+export const REPORT_QUEUE_NAME = "report-evaluation";

@@ -8,6 +8,17 @@ const AI_SERVICE_URL = (process.env.AI_SERVICE_URL ?? "http://localhost:8000").r
 );
 const AI_SERVICE_API_KEY = process.env.AI_SERVICE_API_KEY;
 
+function intEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// Local CPU inference (the Ollama fallback) can take minutes. Keep this
+// aligned with the AI service's generation budget instead of aborting at 60 s.
+const AI_REQUEST_TIMEOUT_MS = intEnv("AI_REQUEST_TIMEOUT_MS", 900_000);
+
 // Only the explicitly supported AI endpoints may be proxied.
 const ALLOWED_PATHS = new Set([
   "v1/interviews/plan",
@@ -48,12 +59,14 @@ export async function POST(
         "X-API-Key": AI_SERVICE_API_KEY,
       },
       body,
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(AI_REQUEST_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error) {
+    const timedOut =
+      (error as { name?: string } | null)?.name === "TimeoutError";
     return NextResponse.json(
-      { error: "AI service unavailable" },
-      { status: 502 }
+      { error: timedOut ? "AI service timed out" : "AI service unavailable" },
+      { status: timedOut ? 504 : 502 }
     );
   }
 

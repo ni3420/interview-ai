@@ -1,6 +1,10 @@
 import { Worker } from "bullmq";
 import { config } from "./config";
 import { processResumeJob, reportTerminalFailure } from "./processor";
+import {
+  processReportJob,
+  reportEvaluationTerminalFailure,
+} from "./report-processor";
 import { createRedisConnection } from "./redis";
 
 function log(message: string, meta?: Record<string, unknown>): void {
@@ -8,10 +12,15 @@ function log(message: string, meta?: Record<string, unknown>): void {
 }
 
 const connection = createRedisConnection();
-
 const worker = new Worker(config.queueName, processResumeJob, {
   connection,
   concurrency: config.workerConcurrency,
+});
+
+const reportConnection = createRedisConnection();
+const reportWorker = new Worker(config.reportQueueName, processReportJob, {
+  connection: reportConnection,
+  concurrency: config.reportWorkerConcurrency,
 });
 
 worker.on("ready", () => log("worker ready", { queue: config.queueName }));
@@ -25,6 +34,7 @@ worker.on("failed", (job, error) => {
     JSON.stringify({
       level: "error",
       message: "job failed",
+      queue: config.queueName,
       jobId: job?.id,
       attemptsMade: job?.attemptsMade,
       attempts: job?.opts.attempts,
@@ -46,11 +56,47 @@ worker.on("error", (error) => {
   );
 });
 
+reportWorker.on("ready", () =>
+  log("report worker ready", { queue: config.reportQueueName })
+);
+
+reportWorker.on("completed", (job, result) =>
+  log("report job completed", { jobId: job.id, result })
+);
+
+reportWorker.on("failed", (job, error) => {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      message: "report job failed",
+      queue: config.reportQueueName,
+      jobId: job?.id,
+      attemptsMade: job?.attemptsMade,
+      attempts: job?.opts.attempts,
+      error: error.message,
+    })
+  );
+
+  if (job) {
+    void reportEvaluationTerminalFailure(job, error);
+  }
+});
+
+reportWorker.on("error", (error) => {
+  console.error(
+    JSON.stringify({
+      level: "error",
+      message: "report worker error",
+      error: error.message,
+    })
+  );
+});
+
 async function shutdown(signal: string): Promise<void> {
   log("shutting down", { signal });
   try {
-    await worker.close();
-    await connection.quit();
+    await Promise.all([worker.close(), reportWorker.close()]);
+    await Promise.all([connection.quit(), reportConnection.quit()]);
   } finally {
     process.exit(0);
   }
@@ -61,6 +107,8 @@ process.on("SIGINT", () => void shutdown("SIGINT"));
 
 log("worker started", {
   queue: config.queueName,
+  reportQueue: config.reportQueueName,
   concurrency: config.workerConcurrency,
+  reportConcurrency: config.reportWorkerConcurrency,
   aiServiceUrl: config.aiServiceUrl,
 });

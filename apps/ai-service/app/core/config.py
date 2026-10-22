@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     # Model provider selection. "gemini" is the optional remote provider;
     # "ollama" uses local inference so the service works without cloud keys.
     ai_provider: str = "gemini"
+    # When the primary provider is unavailable (quota, 5xx, timeout) and this
+    # local provider has the configured model installed, continue on it.
+    # Set to an empty string to disable the fallback.
+    ai_fallback_provider: str = "ollama"
     ollama_model: str = "llama3.2:1b"
     ollama_temperature: float = 0.7
     # Bound generation so slow local CPU inference still completes in time.
@@ -38,6 +42,9 @@ class Settings(BaseSettings):
     # LangChain. The model + dimension are part of the stored metadata so that
     # vectors from incompatible models are never mixed.
     ollama_base_url: str = "http://localhost:11434"
+    # Development uses local Ollama embeddings; no cloud key is required.
+    # Adding a remote provider requires a new config version and a re-index.
+    embedding_provider: str = "ollama"
     embedding_model: str = "nomic-embed-text"
     embedding_dimension: int = 768
     embedding_config_version: str = "v1"

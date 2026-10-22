@@ -73,5 +73,26 @@ export default defineSchema({
     createdAt: v.number(),
   }).index("by_interview", ["interviewId"])
     .index("by_user", ["userId"]),
+
+  // Durable status for the asynchronous report-generation job. The report
+  // itself lives in `reports`; this table lets the UI observe queued,
+  // processing, completed and failed without holding an HTTP request open.
+  reportJobs: defineTable({
+    interviewId: v.id("interviews"),
+    userId: v.id("users"),
+    status: v.union(
+      v.literal("queued"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    error: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_interview", ["interviewId"])
+    .index("by_user", ["userId"]),
 });
 

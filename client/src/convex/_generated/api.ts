@@ -28,7 +28,10 @@ export const api = {
   },
   reports: {
     saveReport: asMutationRef("reports:saveReport"),
+    requestReport: asMutationRef("reports:requestReport"),
     getReport: asQueryRef("reports:getReport"),
+    getReportJob: asQueryRef("reports:getReportJob"),
+    markReportJobFailed: asMutationRef("reports:markReportJobFailed"),
     getUserReports: asQueryRef("reports:getUserReports"),
   },
   resume: {
