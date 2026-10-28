@@ -1,7 +1,7 @@
 # AGENTS.md — Interview AI
 
 > Rules only. Facts: [docs/status.md](docs/status.md). Architecture: [docs/architecture.md](docs/architecture.md). Design:
-> [docs/design-system.md](docs/design-system.md). Plan: [docs/plan/production-readiness.md](docs/plan/production-readiness.md). Code wins; update this file in the same change. Re-check status with `bash scripts/verify-agents.sh`.
+> [docs/design-system.md](docs/design-system.md). Plan: [docs/plan/production-readiness.md](docs/plan/production-readiness.md). Code wins; update this file in the same change. Re-check status with `bash scripts/verify-agents.sh` (script is currently missing — see `docs/status.md` Drift log).
 
 ## How to use this file
 

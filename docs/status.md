@@ -35,6 +35,42 @@ Verified 2026-10-28:
   largest chunk **629 KB** raw. gzip and per-route First Load JS are not emitted by this
   Next 16.4 build.
 
+## Performance baseline (2026-10-29)
+
+Timing producers now exist (Q9): AI service `app/core/metrics.py`, worker `src/log.ts`,
+room `room-timing.ts`, and the report-enqueue route. Numbers are local CPU inference with
+small n — a baseline for comparing the next step, not a production SLA.
+
+Model calls — `node scripts/bench-ai.mjs`, service started with
+`AI_PROVIDER=ollama AI_FALLBACK_PROVIDER=` on port 8011. One warm-up is discarded;
+`cold` is the first call of the scene.
+
+| Scene | n | Errors | Cold | p50 | p95 |
+|---|---|---|---|---|---|
+| plan, 4.8k-char résumé | 10 | 1 (model returned question objects; HTTP 500) | 36.4 s | 19.9 s | 23.9 s |
+| next-question | 5 | 0 | 7.5 s | 3.3 s | 3.4 s |
+| evaluate, 6 Q&A | 3 | 0 | 28.4 s | 24.3 s | 33.4 s |
+| embed 4.8k chars | 5 | 0 | 2.1 s | 0.33 s | 0.66 s |
+
+Client payload — `node scripts/measure-client.mjs` (build exit 0, 16 routes): all static
+JS **578.0 KB gzip** across 35 files. Per-route gzip (root layout + route chunks):
+
+| Route | gzip |
+|---|---|
+| `/interview/[id]` | 459.2 KB |
+| `/interview/setup` | 297.0 KB |
+| `/interview/[id]/lobby` | 284.1 KB |
+| `/dashboard` | 282.8 KB |
+| `/interview/[id]/report` | 282.1 KB |
+| `/reports` | 281.5 KB |
+| `/` | 246.4 KB |
+
+The interview room carries about 176 KB gzip more than the dashboard and 162 KB more than
+any other route.
+
+Not measured: live turn latency (Gemini Live exposes no hook), résumé download/extract/
+index stages (needs a PDF + Qdrant), and any real-device session.
+
 ## Does not exist
 
 Verified 2026-10-28:
@@ -83,7 +119,7 @@ passing gates must stay green; failing gates must not get worse. Only the Releas
 | Q6 | **not run** — no UI change in the audit |
 | Q7 | **FAIL** — 13 toast calls; copy does not match D17 |
 | Q8 | **FAIL** — `client/test/flows` does not exist |
-| Q9 | **FAIL** — 0 timing fields (`durationMs`, `joinedAt`, `turnLatency`, `reportStartedAt`) |
+| Q9 | **partial** (2026-10-29 re-run) — producers exist for 6 of 7 F9 rows; live turn latency has no hook. See §Performance baseline |
 | Q10 | **pass** — typecheck 0, 11 tests passed / 0 failed |
 | Q11 | **pass** — `bun run build` exit 0, 16 routes |
 | Q12 | **FAIL** — 3 `dev-secret-key` hits (`compose.yaml:53,84`, `config.py:36`) |
@@ -114,6 +150,8 @@ Found during the 2026-10-28 audit; docs updated where noted:
 | `architecture.md` §8 env table | listed `AI_SERVICE_API_KEY` only | the Python service reads `SERVICE_API_KEY`; compose bridges the two names | doc now states the mapping |
 | Report evidence and score source | G-20 described coverage only | no quote per score (`schema.ts:68-72`); overall score is the model's `overall_score` (`report-processor.ts:167`), not derived | G-20 expanded, plan Phase 3 |
 | Room conversational state | not registered | room shows only "Live"; leave control ends the interview | added G-49 |
+| `scripts/verify-agents.sh` | gate claims it exits 0 | **file absent**; `scripts/` is empty | flagged 2026-10-29; not recreated without approval |
+| Static build size | 2.4 MB raw (2026-10-28) | `.next/static` absent on 2026-10-29; scripted gzip measured instead (578.0 KB) | re-measured; see §Performance baseline |
 
 ## Report format
 

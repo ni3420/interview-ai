@@ -2,6 +2,7 @@ import type { Job } from "bullmq";
 import { config } from "./config";
 import { postJson } from "./http";
 import { resumeJobSchema, type ResumeJob } from "./job";
+import { logEvent, logStage, queueWaitMs } from "./log";
 
 export interface ResumeProcessResult {
   chunkCount: number;
@@ -121,10 +122,18 @@ export async function reportTerminalFailure(
 export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
   const payload: ResumeJob = resumeJobSchema.parse(job.data);
   const authHeaders = { "X-API-Key": config.aiServiceApiKey };
+  const jobId = job.id;
+
+  logEvent("info", "resume job started", {
+    jobId,
+    queue: config.queueName,
+    queueWaitMs: queueWaitMs(job),
+  });
 
   try {
     await job.updateProgress(10);
 
+    let startedAt = performance.now();
     const processed = await postJson<ResumeProcessResponse>(
       `${config.aiServiceUrl}/v1/resumes/process`,
       {
@@ -134,6 +143,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
       },
       authHeaders
     );
+    logStage("worker.resume.process", startedAt, { jobId });
 
     await job.updateProgress(40);
 
@@ -142,6 +152,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
     // read another user's documents. Fall back to the full text if it fails.
     let resumeContext = processed.text;
     try {
+      startedAt = performance.now();
       const retrieved = await postJson<RetrieveResponse>(
         `${config.aiServiceUrl}/v1/resumes/retrieve`,
         {
@@ -152,6 +163,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
         },
         authHeaders
       );
+      logStage("worker.resume.retrieve", startedAt, { jobId });
       if (retrieved.chunks.length > 0) {
         resumeContext = retrieved.chunks.map((chunk) => chunk.text).join("\n\n");
       }
@@ -163,6 +175,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
 
     await job.updateProgress(70);
 
+    startedAt = performance.now();
     const plan = await postJson<InterviewPlanResponse>(
       `${config.aiServiceUrl}/v1/interviews/plan`,
       {
@@ -171,6 +184,11 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
       },
       authHeaders
     );
+    logStage("worker.resume.plan", startedAt, {
+      jobId,
+      promptChars: resumeContext.length + payload.jobDescription.length,
+      questionCount: plan.questions.length,
+    });
 
     if (plan.questions.length === 0) {
       // An empty plan would leave the lobby stuck at "ready" with no questions.
@@ -184,6 +202,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
         "CONVEX_SITE_URL / WORKER_SERVICE_KEY not set; skipping result persistence"
       );
     } else {
+      startedAt = performance.now();
       await postJson<{ success: boolean }>(
         `${config.convexSiteUrl}/worker/resume-complete`,
         {
@@ -198,6 +217,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
         },
         { "X-Worker-Key": config.workerServiceKey }
       );
+      logStage("worker.resume.persist", startedAt, { jobId });
     }
 
     await job.updateProgress(100);

@@ -5,6 +5,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { captureException } from "@/lib/glitchtip";
 import type { TranscriptItem } from "./transcription-panel";
+import { logRoomTiming } from "./room-timing";
 import {
   applyTranscriptTurn,
   initialRecorderState,
@@ -32,8 +33,13 @@ export function useTranscriptRecorder(interviewId: string) {
 
       if (!answer) return;
 
+      const receivedAt = performance.now();
       queueRef.current = queueRef.current
         .then(() => saveAnswer({ interviewId, ...answer }))
+        .then(() => {
+          const turnLatencyMs = Math.round(performance.now() - receivedAt);
+          logRoomTiming("turn.persist", turnLatencyMs, { turnLatencyMs });
+        })
         .catch((error) => {
           captureException(error, {
             interviewId,

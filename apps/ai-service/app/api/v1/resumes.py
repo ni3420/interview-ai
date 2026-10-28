@@ -6,6 +6,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from app.api.deps import verify_api_key
 from app.core.config import settings
+from app.core.metrics import timed
 from app.repositories import vector_store
 from app.schemas.resume import (
     ResumeChunk,
@@ -49,23 +50,27 @@ async def download_pdf(url: str) -> bytes:
 async def process_resume(request: ResumeProcessRequest) -> ResumeProcessResponse:
     """Extract, chunk, embed and index a resume into Qdrant."""
     try:
-        data = await download_pdf(str(request.file_url))
+        with timed("resume.download", resumeId=request.resume_id):
+            data = await download_pdf(str(request.file_url))
         # PDF parsing, chunking and embedding/indexing are blocking CPU and IO
         # work. Running them inline in this `async def` would stall the event
         # loop (health checks, retrieval and other jobs) for the whole
         # embedding call, so they run in the worker threadpool instead.
-        text = await run_in_threadpool(extract_text_from_pdf, data)
-        chunks = await run_in_threadpool(chunk_text, text)
+        with timed("resume.extract", resumeId=request.resume_id):
+            text = await run_in_threadpool(extract_text_from_pdf, data)
+        with timed("resume.chunk", resumeId=request.resume_id):
+            chunks = await run_in_threadpool(chunk_text, text)
         if not chunks:
             raise HTTPException(
                 status_code=422, detail="Resume did not contain usable text"
             )
-        chunk_count = await run_in_threadpool(
-            vector_store.index_resume,
-            request.user_id,
-            request.resume_id,
-            chunks,
-        )
+        with timed("resume.index", resumeId=request.resume_id, chunkCount=len(chunks)):
+            chunk_count = await run_in_threadpool(
+                vector_store.index_resume,
+                request.user_id,
+                request.resume_id,
+                chunks,
+            )
     except ResumeExtractionError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except vector_store.VectorStoreConfigError as exc:
@@ -100,13 +105,18 @@ async def retrieve_resume_context(
     try:
         # Similarity search embeds the query synchronously; keep it off the
         # event loop for the same reason as indexing above.
-        results = await run_in_threadpool(
-            vector_store.search_resume,
-            request.user_id,
-            request.resume_id,
-            request.query,
-            request.limit,
-        )
+        with timed(
+            "resume.retrieve",
+            resumeId=request.resume_id,
+            limit=request.limit,
+        ):
+            results = await run_in_threadpool(
+                vector_store.search_resume,
+                request.user_id,
+                request.resume_id,
+                request.query,
+                request.limit,
+            )
     except vector_store.VectorStoreConfigError as exc:
         logging.error("Vector store configuration error", exc_info=True)
         raise HTTPException(

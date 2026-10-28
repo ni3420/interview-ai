@@ -13,12 +13,21 @@ from app.api.deps import verify_api_key
 from app.ai.providers.factory import get_llm_provider
 from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
 from app.core.config import settings
+from app.core.metrics import timed
 import json
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
 router = APIRouter()
+
+
+def _configured_provider() -> str:
+    return settings.ai_provider.strip().lower()
+
+
+def _configured_model(provider: str) -> str:
+    return settings.gemini_model if provider == "gemini" else settings.ollama_model
 
 
 def parse_json_response(response: str) -> dict:
@@ -44,7 +53,15 @@ async def generate_interview_plan(request: InterviewPlanRequest):
         job_description=request.job_description,
     )
     try:
-        response = await get_llm_provider().generate(prompt)
+        provider = _configured_provider()
+        with timed(
+            "llm.generate",
+            conversation="plan",
+            configuredProvider=provider,
+            configuredModel=_configured_model(provider),
+            promptChars=len(prompt),
+        ):
+            response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
         return InterviewPlanResponse(
             questions=data.get("questions", []),
@@ -76,7 +93,15 @@ async def generate_next_question(request: NextQuestionRequest):
         previous_qa=previous_qa_str,
     )
     try:
-        response = await get_llm_provider().generate(prompt)
+        provider = _configured_provider()
+        with timed(
+            "llm.generate",
+            conversation="next_question",
+            configuredProvider=provider,
+            configuredModel=_configured_model(provider),
+            promptChars=len(prompt),
+        ):
+            response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
         return NextQuestionResponse(
             question=data.get("question", ""),
@@ -106,7 +131,15 @@ async def evaluate_interview(request: EvaluationRequest):
         qa_pairs=qa_pairs_str,
     )
     try:
-        response = await get_llm_provider().generate(prompt)
+        provider = _configured_provider()
+        with timed(
+            "llm.generate",
+            conversation="evaluate",
+            configuredProvider=provider,
+            configuredModel=_configured_model(provider),
+            promptChars=len(prompt),
+        ):
+            response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
         return EvaluationResponse(
             overall_score=data.get("overall_score", 0),

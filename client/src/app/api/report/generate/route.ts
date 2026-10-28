@@ -30,6 +30,7 @@ interface RequestReportState {
  * never waits on (or times out) a multi-minute local-model call.
  */
 export async function POST(request: NextRequest) {
+  const startedAt = performance.now();
   const { userId, getToken } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -120,6 +121,15 @@ export async function POST(request: NextRequest) {
       .catch(() => {});
     return NextResponse.json({ error: "enqueue_failed" }, { status: 502 });
   }
+
+  console.info(
+    JSON.stringify({
+      level: "info",
+      message: "report enqueue",
+      interviewId,
+      durationMs: Math.round(performance.now() - startedAt),
+    })
+  );
 
   return NextResponse.json({ status: "queued" }, { status: 202 });
 }

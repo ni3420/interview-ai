@@ -5,6 +5,7 @@ import type { Call } from "@stream-io/video-react-sdk";
 import { Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AI_INTERVIEWER_ID, AI_INTERVIEWER_NAME } from "./constants";
+import { logAgentAudibleOnce } from "./room-timing";
 
 /** A single finalized line of speech shown in the transcript panel. */
 export interface TranscriptItem {
@@ -145,6 +146,7 @@ export function TranscriptionPanel({
 
       if (!seenUtterancesRef.current.has(utteranceKey)) {
         seenUtterancesRef.current.add(utteranceKey);
+        if (isInterviewer(item)) logAgentAudibleOnce();
         onTranscriptRef.current?.(item);
       }
     };

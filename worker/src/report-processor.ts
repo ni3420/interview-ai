@@ -3,6 +3,7 @@ import { z } from "zod";
 import { config } from "./config";
 import { postJson } from "./http";
 import { reportJobSchema } from "./job";
+import { logEvent, logStage, queueWaitMs } from "./log";
 import { isTerminalFailure } from "./processor";
 
 export interface ReportProcessResult {
@@ -112,23 +113,36 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
 
   const payload = parsedPayload.data;
   const workerHeaders = { "X-Worker-Key": config.workerServiceKey };
+  const jobId = job.id;
+
+  logEvent("info", "report job started", {
+    jobId,
+    queue: config.reportQueueName,
+    queueWaitMs: queueWaitMs(job),
+    reportEnqueuedAt: job.timestamp,
+    reportStartedAt: job.processedOn ?? job.timestamp,
+  });
 
   try {
     await job.updateProgress(5);
 
+    let startedAt = performance.now();
     await postJson<{ success: boolean }>(
       `${config.convexSiteUrl}/worker/report-start`,
       { interviewId: payload.interviewId },
       workerHeaders,
       15_000
     );
+    logStage("worker.report.start", startedAt, { jobId });
 
+    startedAt = performance.now();
     const rawContext = await postJson<unknown>(
       `${config.convexSiteUrl}/worker/report-context`,
       { interviewId: payload.interviewId },
       workerHeaders,
       15_000
     );
+    logStage("worker.report.context", startedAt, { jobId });
     const context: ReportContext = reportContextSchema.parse(rawContext);
 
     if (context.qaPairs.length === 0) {
@@ -138,6 +152,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
 
     await job.updateProgress(20);
 
+    startedAt = performance.now();
     const rawEvaluation = await postJson<unknown>(
       `${config.aiServiceUrl}/v1/interviews/evaluate`,
       {
@@ -151,6 +166,12 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
       { "X-API-Key": config.aiServiceApiKey },
       config.reportAiRequestTimeoutMs
     );
+    logStage("worker.report.evaluate", startedAt, {
+      jobId,
+      answerCount: context.qaPairs.length,
+      promptChars:
+        context.resumeText.length + context.jobDescription.length,
+    });
     const evaluation: Evaluation = evaluationSchema.parse(rawEvaluation);
 
     await job.updateProgress(85);
@@ -160,6 +181,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
       evaluation.question_scores
     );
 
+    startedAt = performance.now();
     await postJson<{ success: boolean }>(
       `${config.convexSiteUrl}/worker/report-complete`,
       {
@@ -173,6 +195,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
       workerHeaders,
       30_000
     );
+    logStage("worker.report.persist", startedAt, { jobId });
 
     await job.updateProgress(100);
 

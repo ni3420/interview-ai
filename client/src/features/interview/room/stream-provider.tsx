@@ -18,6 +18,7 @@ import { AlertCircle, Loader2, Sparkles, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { captureException } from "@/lib/glitchtip";
+import { logRoomTiming, startJoinTiming } from "./room-timing";
 import {
   dispatchInterviewerAgent,
   fetchStreamSession,
@@ -102,9 +103,12 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
 
     async function connect() {
       setState({ status: "loading" });
+      startJoinTiming();
       try {
+        const tokenStartedAt = performance.now();
         const session = await fetchStreamSession(interviewId);
         if (cancelled) return;
+        logRoomTiming("room.token", performance.now() - tokenStartedAt);
 
         const client = StreamVideoClient.getOrCreateInstance({
           apiKey: session.apiKey,
@@ -112,32 +116,46 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
           user: session.user,
         });
         const call = client.call(session.callType, session.callId);
+        const joinStartedAt = performance.now();
         await call.join({ create: true });
         joinedCall = call;
+        logRoomTiming("room.join", performance.now() - joinStartedAt, {
+          joinedAt: Date.now(),
+        });
 
         if (cancelled) {
           await call.leave().catch(() => {});
           return;
         }
 
+        const captionsStartedAt = performance.now();
         try {
           await call.startClosedCaptions({ language: "en" });
         } catch (captionError) {
           console.warn("Closed captions are unavailable", captionError);
         }
+        logRoomTiming("room.captions", performance.now() - captionsStartedAt);
 
         if (!cancelled) {
-          void dispatchInterviewerAgent(interviewId).catch((agentError) => {
-            console.warn("AI interviewer dispatch failed", agentError);
-            captureException(agentError, {
-              interviewId,
-              scope: "stream-provider",
-              step: "dispatch-interviewer",
+          const dispatchStartedAt = performance.now();
+          void dispatchInterviewerAgent(interviewId)
+            .then(() =>
+              logRoomTiming(
+                "room.dispatch",
+                performance.now() - dispatchStartedAt
+              )
+            )
+            .catch((agentError) => {
+              console.warn("AI interviewer dispatch failed", agentError);
+              captureException(agentError, {
+                interviewId,
+                scope: "stream-provider",
+                step: "dispatch-interviewer",
+              });
+              toast.warning(
+                "The AI interviewer could not join. You can still continue the interview."
+              );
             });
-            toast.warning(
-              "The AI interviewer could not join. You can still continue the interview."
-            );
-          });
         }
 
         setState({ status: "ready", session, client, call });
