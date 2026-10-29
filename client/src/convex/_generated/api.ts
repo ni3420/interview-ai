@@ -13,6 +13,7 @@ export const api = {
   users: {
     syncUser: asMutationRef("users:syncUser"),
     getCurrentUser: asQueryRef("users:getCurrentUser"),
+    getSyncStatus: asQueryRef("users:getSyncStatus"),
   },
   interviews: {
     createInterview: asMutationRef("interviews:createInterview"),

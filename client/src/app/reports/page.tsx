@@ -8,6 +8,7 @@ import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useUserSync } from "@/components/layout/UserSyncProvider";
 import {
   Award,
   BarChart3,
@@ -68,6 +69,7 @@ function truncateText(text: string, maxLength: number = 45): string {
 
 export default function ReportsPage() {
   const { isLoaded, isSignedIn } = useUser();
+  const { status: syncStatus } = useUserSync();
   const router = useRouter();
 
   const today = new Date();
@@ -79,11 +81,11 @@ export default function ReportsPage() {
 
   const reports = useQuery(
     api.reports.getUserReports,
-    isLoaded && isSignedIn ? {} : "skip"
+    syncStatus === "synced" ? {} : "skip"
   ) as ReportRecord[] | undefined;
   const interviews = useQuery(
     api.interviews.getInterviews,
-    isLoaded && isSignedIn ? {} : "skip"
+    syncStatus === "synced" ? {} : "skip"
   ) as InterviewRecord[] | undefined;
 
   useEffect(() => {

@@ -49,7 +49,7 @@ Next.js (3000)
 
 | Table | Key fields | Indexes | Notes |
 |---|---|---|---|
-| `users` | `clerkId`, `email`, `name`, `imageUrl` | `by_clerk_id` | No billing or plan fields exist. `syncUser` is the only writer (G-01) |
+| `users` | `clerkId`, `email`, `name`, `imageUrl` | `by_clerk_id` | No billing or plan fields exist. Written only from the verified JWT: `users.syncUser` (profile fields only, never an identity) and `interviews.createInterview` share `upsertUserFromIdentity` (G-01, G-50) |
 | `interviews` | `userId`, `resumeId?`, `resumeText?`, `jobDescription`, `status` (`setup`/`in_progress`/`completed`/`failed`), `plan`, `currentQuestionIndex`, `durationMinutes`, timestamps | `by_user`, `by_user_status` | `plan` is `v.any()` — question plan is stored untyped |
 | `answers` | `interviewId`, `questionIndex`, `question`, `answer`, `followUpCount` | `by_interview` | No per-answer score; scoring lives in `reports` |
 | `resumes` | `userId`, `storageId`, `fileName`, `contentType`, `size`, `status` (`uploaded`/`processing`/`ready`/`failed`) | `by_user` | Blob in Convex storage |
@@ -64,11 +64,33 @@ not by an id supplied by the client.
 
 1. **Browser → Convex.** Clerk JWT is forwarded by the Convex client. `convex/auth.ts`
    resolves `identity.subject` → `users.clerkId` → `users._id`. `requireAuthUserId`
-   throws when no mapping exists.
+   throws when no mapping exists. `upsertUserFromIdentity` is the only writer and reads
+   the identity itself — no function takes a `clerkId` or `userId` from arguments
+   (G-01, G-50). `users.syncUser` additionally accepts `email`/`name`/`imageUrl` because
+   the Clerk JWT reaching Convex carries no email/name/picture claim (verified 2026-10-29:
+   an identity-only sync left the row with `email: ""` and no `name`/`imageUrl`);
+   those are declared display values (S10), length-bounded and blank-rejected, and the
+   row is still keyed by `identity.subject`, so a forged `clerkId` is rejected by the
+   argument validator. Precedence is identity claim → declared value → stored value, so
+   claims win when the template is later fixed. `users.getSyncStatus` answers `anonymous`
+   (token has not
+   reached Convex yet), `unsynced` (identity, no row) or `synced`; `interviews.createInterview`
+   creates the owner row in its own transaction, so an interview is never written without
+   one. `interviews.getInterviews`/`getInterview` answer `[]`/`null` for an identity with
+   no row — that caller owns nothing, and a thrown query would crash the page that is
+   still waiting; mutations stay fail-closed.
 2. **Browser → Next.js.** `client/src/proxy.ts` (Clerk middleware) guards only
    `/dashboard(.*)` and `/interview(.*)`. `/reports` guards itself with a client effect.
    `UserSyncProvider` in the root layout redirects **every** signed-out visitor to
    `/sign-in`, including `/`, so the landing page is unreachable without a session (G-21).
+   `RequireSyncedUser`, applied inside `DashboardLayout`, holds `/dashboard`, `/reports`
+   and every `/interview/*` page (setup, lobby, room) until `getSyncStatus` reports
+   `synced`, so their queries and mutations never run against a missing row; a failed sync
+   shows a named retry state instead of an error boundary (G-50). `/dashboard` and
+   `/reports` also skip their own page-level queries until `synced`, because those hooks
+   run outside the gate's children. `UserSyncProvider` pushes the Clerk profile once per
+   distinct profile — including over a row already reported `synced` — so a row created
+   before the profile existed gets its name, email and image backfilled.
 3. **Worker → Convex.** Six HTTP actions under `/worker/*` in `convex/http.ts`
    (`resume-complete`, `resume-failed`, `report-context`, `report-start`,
    `report-complete`, `report-failed`), authenticated with `X-Worker-Key` compared

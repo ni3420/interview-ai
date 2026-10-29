@@ -1,7 +1,6 @@
 "use client";
 
 import { ReactNode, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -9,6 +8,8 @@ import {
   type RecentProject,
 } from "@/features/components/layout/Sidebar";
 import { Navbar } from "@/features/components/layout/Navbar";
+import { RequireSyncedUser } from "./RequireSyncedUser";
+import { useUserSync } from "./UserSyncProvider";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -21,12 +22,12 @@ interface DashboardInterviewSummary {
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { status: syncStatus } = useUserSync();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const interviews = useQuery(
     api.interviews.getInterviews,
-    isLoaded && isSignedIn ? {} : "skip"
+    syncStatus === "synced" ? {} : "skip"
   ) as DashboardInterviewSummary[] | undefined;
 
   const recentProjects: RecentProject[] = (interviews ?? [])
@@ -52,7 +53,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           isMobileMenuOpen={mobileNavOpen}
           onMobileMenuToggle={() => setMobileNavOpen((open) => !open)}
         />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <RequireSyncedUser>{children}</RequireSyncedUser>
+        </main>
       </div>
     </div>
   );

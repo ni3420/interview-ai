@@ -2,19 +2,30 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter } from "next/navigation";
 
-type SyncStatus = "loading" | "synced" | "error";
+type SyncStatus = "loading" | "synced" | "signed_out" | "error";
 
-const UserSyncContext = createContext<SyncStatus>("loading");
+interface UserSyncState {
+  status: SyncStatus;
+  retry: () => void;
+}
+
+const UserSyncContext = createContext<UserSyncState>({
+  status: "loading",
+  retry: () => {},
+});
 
 export function useUserSync() {
   return useContext(UserSyncContext);
@@ -25,47 +36,68 @@ export default function UserSyncProvider({
 }: {
   children: ReactNode;
 }) {
-  const { user, isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
   const syncUser = useMutation(api.users.syncUser);
-  const [status, setStatus] = useState<SyncStatus>("loading");
+  const [syncFailed, setSyncFailed] = useState(false);
   const router = useRouter();
 
+  // Primitives, not the Clerk user object: its identity churns between renders
+  // and would re-fire the sync mutation.
+  const email = user?.primaryEmailAddress?.emailAddress;
+  const name = user?.fullName ?? undefined;
+  const imageUrl = user?.imageUrl;
+  const profileKey = [email, name, imageUrl].map((value) => value ?? "").join("|");
+  const pushedProfile = useRef<string | null>(null);
+
+  // The backend answers whether its `users` row exists. A resolved mutation
+  // promise is not proof: the row is only real once Convex has mirrored the
+  // identity it verified itself.
+  const syncState = useQuery(
+    api.users.getSyncStatus,
+    isLoaded && isSignedIn ? {} : "skip"
+  ) as "anonymous" | "unsynced" | "synced" | undefined;
+
+  const runSync = useCallback(() => {
+    pushedProfile.current = profileKey;
+    syncUser({ email, name, imageUrl }).catch((error) => {
+      console.error("User sync failed:", error);
+      setSyncFailed(true);
+    });
+  }, [syncUser, email, name, imageUrl, profileKey]);
+
+  const retry = useCallback(() => {
+    setSyncFailed(false);
+    runSync();
+  }, [runSync]);
+
+  // `"anonymous"` is the window where Clerk finished loading but its token has
+  // not reached Convex, so this waits for the query to flip rather than firing a
+  // mutation that would be rejected. Once the identity has landed, the profile
+  // is pushed once per distinct Clerk profile — including over an existing row,
+  // so a row created before sync carried a profile gets its name, email and
+  // image backfilled.
+  const identityHasLanded = syncState === "unsynced" || syncState === "synced";
+
   useEffect(() => {
-    let cancelled = false;
+    if (isLoaded && !isSignedIn) router.push("/sign-in");
+  }, [isLoaded, isSignedIn, router]);
 
-    // 1. Jab tak Clerk fully load nahi hota, tab tak kuch mat karo (redirect bhi mat karo)
-    if (!isLoaded) return;
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (!identityHasLanded) return;
+    if (pushedProfile.current === profileKey) return;
+    runSync();
+  }, [isLoaded, isSignedIn, identityHasLanded, profileKey, runSync]);
 
-    // 2. Agar Clerk load ho chuka hai, tab check karo ki sach mein user signed out hai kya
-    if (!isSignedIn || !user) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing derived auth status with external Clerk state
-      setStatus("error");
-      router.push("/sign-in");
-      return;
-    }
+  let status: SyncStatus;
+  if (!isLoaded) status = "loading";
+  else if (!isSignedIn) status = "signed_out";
+  else if (syncState === "synced") status = "synced";
+  else if (syncState === "unsynced" && syncFailed) status = "error";
+  else status = "loading";
 
-    setStatus("loading");
+  const value = useMemo(() => ({ status, retry }), [status, retry]);
 
-    syncUser({
-      clerkId: user.id,
-      email: user.primaryEmailAddress?.emailAddress ?? "",
-      name: user.fullName ?? undefined,
-      imageUrl: user.imageUrl ?? undefined,
-    })
-      .then(() => {
-        if (!cancelled) setStatus("synced");
-      })
-      .catch((error) => {
-        console.error("User sync failed:", error);
-        if (!cancelled) setStatus("error");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isLoaded, isSignedIn, user, syncUser, router]);
-
-  // 3. Jab tak Clerk load ho raha hai, tab tak blank ya loading state dikhao taaki error flash na ho
   if (!isLoaded) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -75,7 +107,7 @@ export default function UserSyncProvider({
   }
 
   return (
-    <UserSyncContext.Provider value={status}>
+    <UserSyncContext.Provider value={value}>
       {children}
     </UserSyncContext.Provider>
   );

@@ -62,6 +62,7 @@ Run from the repo root unless a `cd` is shown. Report the exact command and outp
 - **S15** Refuse to start with a default service key and compare with `secrets.compare_digest`. Check: Q12 = 0. Violation: G-22.
 - **S16** Declare every authenticated route in `client/src/proxy.ts`. Check: the matcher covers every non-public route; T16 passes. Violation: G-21, G-30.
 - **S17** Set CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy`. Check: `rg -n "headers\(" client/next.config.ts` and `curl -I`. Violation: G-42.
+- **S18** Mirror identity before writing and wait for it before loading an authenticated route: `users` rows come only from `ctx.auth.getUserIdentity()`, and a protected route fires Convex calls only after `users.getSyncStatus` reports `synced`. Declared profile fields (`email`, `name`, `imageUrl`) may fill the row's display columns but never select the row. Check: `rg -n "RequireSyncedUser" client/src/components/layout/DashboardLayout.tsx` finds the gate, `rg -n "args\.(clerkId|userId|ownerId)" convex` finds 0 and `cd client && bunx vitest run test/userSync.test.ts test/RequireSyncedUser.test.tsx` passes. Violation: G-50, G-51.
 
 ## Data and Convex (C, A)
 
@@ -174,6 +175,7 @@ Run from the repo root unless a `cd` is shown. Report the exact command and outp
 - **T21** Expiry closes the row and stops the agent; tab close does not leave `in_progress`. Check: missing.
 - **T22** Missing Convex config fails the job. Check: worker tests.
 - **T23** A failed report shows D17 copy, never `error.message`. Check: missing.
+- **T24** A signed-in user never runs an authenticated Convex call before the `users` row exists, and a client cannot pass a `clerkId`. Check: `cd client && bunx vitest run test/userSync.test.ts test/RequireSyncedUser.test.tsx`. Violation: G-50.
 
 ## Debt register
 
@@ -181,7 +183,7 @@ Priorities: **Blocker** = security/data loss; **High** = blocks a flow or hides 
 
 | ID | Priority | Rule | File | Fix | Owner |
 |---|---|---|---|---|---|
-| G-01 | Blocker | S1 | `convex/users.ts` | Derive identity from `ctx.auth`; drop the `clerkId` argument. | unassigned |
+| G-01 | Blocker | S1 | `convex/users.ts` | Fixed 2026-10-29: `syncUser` takes no arguments and mirrors `ctx.auth` only. Residual: cross-account coverage for T1. | unassigned |
 | G-02 | High | — | `client/src/lib/glitchtip.ts` | Add `instrumentation.ts`; initialise Sentry server-side. | unassigned |
 | G-03 | Medium | — | `client/src/app/api/stripe/` | Delete the empty route directories. | unassigned |
 | G-04 | High | D12 | `client/src/features/components/common/` | Freeze `common/*`; migrate on touch. | unassigned |
@@ -228,12 +230,16 @@ Priorities: **Blocker** = security/data loss; **High** = blocks a flow or hides 
 | G-46 | Medium | W3 | `apps/ai-service/app/api/v1/interviews.py` | Add JSON logs with a request id. | unassigned |
 | G-47 | Medium | Q13 | `apps/ai-service/pyproject.toml` | Remove the unknown ruff selector `QTY`; extend to unused rule groups. | unassigned |
 | G-49 | Medium | D8 | `client/src/features/interview/room/interview-room.tsx` | Show preparing/listening/responding/reconnecting; confirm before leave. | unassigned |
+| G-50 | Blocker | S1, S18 | `convex/auth.ts`, `client/src/components/layout/UserSyncProvider.tsx` | Fixed 2026-10-29: identity-derived `users` upsert in one transaction; `createInterview` writes its own owner row; protected routes wait on `users.getSyncStatus`. Residual: signed-in cold start unmeasured. | unassigned |
+| G-51 | High | S1, S10 | `convex/users.ts`, `client/src/components/layout/UserSyncProvider.tsx` | Fixed 2026-10-29: the Clerk JWT reaching Convex carries no email/name/picture claim, so `users.email` was written as `""` and `name`/`imageUrl` never landed. `syncUser` now takes declared profile fields (identity claims still win) and the provider re-pushes once per distinct profile, backfilling existing rows. Proper remedy: add those claims to the Clerk JWT template. | unassigned |
+| G-52 | High | S1 | Clerk Dashboard (not this repo) | Open: a first social sign-in returns "External Account was not found". Observed 2026-10-29; not yet diagnosed from code and not fixable here — needs the Clerk app's OAuth provider configuration. | unassigned |
 
 ## Release gate
 
 Every item must be demonstrated, not asserted.
 
 - [ ] G-01 closed; cross-account tests in `client/test/convex.test.ts` pass (T1).
+- [ ] G-50 closed under a real session: a signed-in deep link to `/interview/<id>/lobby` waits for `users.getSyncStatus` instead of firing against a missing row (T24 passes; the signed-in cold start is still unmeasured).
 - [ ] CI runs Q1–Q4, Q10, Q11 on every PR and is green (G-05).
 - [ ] Q12 returns 0; the AI service refuses to start without a key (G-22).
 - [ ] Every key comparison is constant-time; uploads are byte-validated (G-38, G-24).

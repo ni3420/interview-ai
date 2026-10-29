@@ -1,6 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { requireAuthUserId } from "./auth";
+import { getAuthUserId, requireAuthUserId, upsertUserFromIdentity } from "./auth";
 
 export const createInterview = mutation({
   args: {
@@ -10,7 +10,9 @@ export const createInterview = mutation({
     durationMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const userId = await requireAuthUserId(ctx);
+    // Upsert in this transaction: a signed-in user whose `users` row has not
+    // landed yet gets it here instead of an interview written without an owner.
+    const userId = await upsertUserFromIdentity(ctx);
     const now = Date.now();
 
     return await ctx.db.insert("interviews", {
@@ -29,7 +31,11 @@ export const createInterview = mutation({
 
 export const getInterviews = query({
   handler: async (ctx) => {
-    const userId = await requireAuthUserId(ctx);
+    const userId = await getAuthUserId(ctx);
+    // Reads answer "nothing yet" instead of throwing: a caller with no `users`
+    // row owns no rows, and a thrown query crashes the page that is still
+    // waiting for sync. Writes below stay fail-closed.
+    if (!userId) return [];
     return await ctx.db
       .query("interviews")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -41,7 +47,8 @@ export const getInterviews = query({
 export const getInterview = query({
   args: { interviewId: v.id("interviews") },
   handler: async (ctx, args) => {
-    const userId = await requireAuthUserId(ctx);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
     const interview = await ctx.db.get(args.interviewId);
     if (!interview || interview.userId !== userId) return null;
     return interview;

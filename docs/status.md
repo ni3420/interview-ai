@@ -17,6 +17,16 @@ Verified 2026-10-28:
   `report-evaluation`).
 - AI service: FastAPI (uv), port 8000; Qdrant `:6333`; Gemini primary, Ollama fallback.
 - Auth: Clerk v6. Convex identity is `identity.subject` → `users.clerkId`.
+- Identity mirror (2026-10-29, G-50): `users` is written only from
+  `ctx.auth.getUserIdentity()` via `convex/auth.ts:upsertUserFromIdentity`; a client that
+  sends `clerkId` to `users:syncUser` is rejected by the argument validator
+  (`Validator: v.object({email, imageUrl, name})` — `clerkId` is not a field).
+- Profile mirror (2026-10-29, G-51): the JWT reaching Convex carries no email/name/picture
+  claim, so identity-only sync wrote `email: ""` and left `name`/`imageUrl` absent.
+  `users.syncUser` now accepts those as declared display values and the provider re-pushes
+  once per distinct profile. Verified on the local deployment: the row for
+  `user_3LMq5nwrzveGxXIGbt0NlUQMJgR` went from `email: ""` / no name / no image to
+  `email` + `name: "Sanjay"` + `imageUrl` set, `updatedAt` after `createdAt`.
 - Worker bridge: **6** `/worker/*` actions in `convex/http.ts` — `resume-complete`,
   `resume-failed`, `report-context`, `report-start`, `report-complete`, `report-failed` —
   authenticated by `X-Worker-Key`.
@@ -124,6 +134,20 @@ passing gates must stay green; failing gates must not get worse. Only the Releas
 | Q11 | **pass** — `bun run build` exit 0, 16 routes |
 | Q12 | **FAIL** — 3 `dev-secret-key` hits (`compose.yaml:53,84`, `config.py:36`) |
 | Q13 | **FAIL** — `uv run ruff check app` aborts on unknown selector `QTY` (G-47) |
+
+Re-run 2026-10-29 after the G-50 fix (identity-derived `users` sync + verified-sync gate):
+Q1 `bunx tsc --noEmit` exit **0**; Q2 `bun run lint` **0 errors, 9 warnings** (same 9);
+Q3 `bun run test` **183 passed, 6 failed / 189 tests** — the same 2 files and same 6 tests
+as the baseline (`InterviewLobby.test.tsx` 3, `JobDescriptionInput.test.tsx` 3, all G-25),
+plus 26 new passing tests: `test/userSync.test.ts` (18) and
+`test/RequireSyncedUser.test.tsx` (8). Not run: Q4–Q13.
+
+Re-run 2026-10-29 after the G-51 profile fix (declared `email`/`name`/`imageUrl` + backfill):
+Q1 exit **0**; Q2 **0 errors, 9 warnings** (same 9); Q3 `bun run test` **189 passed,
+6 failed / 195 tests** — the same 2 files and same 6 G-25 tests as the baseline, plus 6
+new passing tests. Identity-argument check: `rg -n "args\.(clerkId|userId|ownerId)" convex`
+finds 0. Live probe: `convex run users:syncUser '{"clerkId":"user_victim", …}'` still fails
+closed with `ArgumentValidationError`.
 
 Load target for the release gate: **UNVERIFIED** — `N` concurrent interviews is not yet
 chosen or measured.

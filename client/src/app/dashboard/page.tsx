@@ -6,6 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { useUserSync } from "@/components/layout/UserSyncProvider";
 import { Button } from "@/features/components/common/Button";
 import { StatsOverview } from "@/features/components/dashboard/StatsOverview";
 import {
@@ -19,11 +20,14 @@ import Link from "next/link";
 
 export default function DashboardPage() {
   const { isLoaded, isSignedIn } = useUser();
+  const { status: syncStatus } = useUserSync();
   const router = useRouter();
 
+  // Fires only after the backend confirms the `users` row; otherwise the query
+  // runs against an account that does not exist yet and throws Unauthorized.
   const interviews = useQuery(
     api.interviews.getInterviews,
-    isLoaded && isSignedIn ? {} : "skip"
+    syncStatus === "synced" ? {} : "skip"
   ) as DashboardInterview[] | undefined;
 
   useEffect(() => {

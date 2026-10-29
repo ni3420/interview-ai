@@ -3,6 +3,8 @@ import { createMockCtx, mockAuthUserId, mockInterview, mockAnswers, mockReport, 
 
 vi.mock("../../convex/auth", () => ({
   requireAuthUserId: vi.fn().mockResolvedValue(mockAuthUserId),
+  getAuthUserId: vi.fn().mockResolvedValue(mockAuthUserId),
+  upsertUserFromIdentity: vi.fn().mockResolvedValue(mockAuthUserId),
 }));
 
 import * as Interviews from "../../convex/interviews";
