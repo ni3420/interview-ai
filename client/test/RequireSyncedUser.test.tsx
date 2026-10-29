@@ -7,7 +7,8 @@ const mocks = vi.hoisted(() => ({
   useQuery: vi.fn(),
   useMutation: vi.fn(),
   // Stable, like Next's router instance, so effect deps behave like production.
-  router: { push: vi.fn() },
+  router: { push: vi.fn(), replace: vi.fn() },
+  pathname: "/dashboard",
 }));
 
 vi.mock("@clerk/nextjs", () => ({ useUser: mocks.useUser }));
@@ -17,6 +18,7 @@ vi.mock("convex/react", () => ({
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => mocks.router,
+  usePathname: () => mocks.pathname,
 }));
 
 import UserSyncProvider from "@/components/layout/UserSyncProvider";
@@ -44,6 +46,8 @@ function renderProtected(syncState: SyncState, user: Record<string, unknown> = {
 describe("RequireSyncedUser", () => {
   beforeEach(() => {
     mocks.router.push.mockReset();
+    mocks.router.replace.mockReset();
+    mocks.pathname = "/dashboard";
     mocks.useQuery.mockReset();
     mocks.useMutation.mockReset();
     mocks.useMutation.mockReturnValue(vi.fn().mockResolvedValue("users-1"));
@@ -185,6 +189,69 @@ describe("RequireSyncedUser", () => {
 
     await waitFor(() => expect(syncUser).toHaveBeenCalledTimes(2));
     expect(screen.queryByText("Protected lobby content")).toBeNull();
+    error.mockRestore();
+  });
+
+  it("names a taken address instead of offering a retry", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const syncUser = vi
+      .fn()
+      .mockRejectedValue(
+        new Error("EMAIL_ALREADY_LINKED: this email address already belongs to another account")
+      );
+    mocks.useMutation.mockReturnValue(syncUser);
+
+    renderProtected("unsynced", {
+      user: { primaryEmailAddress: { emailAddress: "abc@example.com" } },
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/already in use/i);
+    // Retrying re-runs the same rejected mutation, so the button would only
+    // invite the user to repeat a failure that cannot be fixed client-side.
+    expect(screen.queryByRole("button", { name: /retry/i })).toBeNull();
+    expect(syncUser).toHaveBeenCalledTimes(1);
+    error.mockRestore();
+  });
+
+  it("sends a taken address to the sign-up page instead of the dashboard", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const syncUser = vi
+      .fn()
+      .mockRejectedValue(new Error("EMAIL_ALREADY_LINKED: already belongs to another account"));
+    mocks.useMutation.mockReturnValue(syncUser);
+
+    renderProtected("unsynced", {
+      user: { primaryEmailAddress: { emailAddress: "abc@example.com" } },
+    });
+
+    await waitFor(() =>
+      expect(mocks.router.replace).toHaveBeenCalledWith("/sign-up?reason=email-taken")
+    );
+    // The gate holds the protected surface closed while the navigation lands, so
+    // a refused account never gets one frame of dashboard.
+    expect(screen.queryByText("Protected lobby content")).toBeNull();
+    error.mockRestore();
+  });
+
+  it("does not bounce a refused visitor off the sign-up page it landed on", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const syncUser = vi
+      .fn()
+      .mockRejectedValue(new Error("EMAIL_ALREADY_LINKED: already belongs to another account"));
+    mocks.useMutation.mockReturnValue(syncUser);
+    mocks.pathname = "/sign-up";
+
+    renderProtected("unsynced", {
+      user: { primaryEmailAddress: { emailAddress: "abc@example.com" } },
+    });
+
+    await waitFor(() => expect(mocks.router.replace).toHaveBeenCalledTimes(1));
+    expect(mocks.router.replace).toHaveBeenCalledWith("/sign-up?reason=email-taken");
+    // The signed-out redirect must not fight the destination, and the refused
+    // visitor must not be re-pushed around in a loop.
+    expect(mocks.router.push).not.toHaveBeenCalled();
+    expect(syncUser).toHaveBeenCalledTimes(1);
     error.mockRestore();
   });
 

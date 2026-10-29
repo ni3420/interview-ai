@@ -13,17 +13,30 @@ import {
 import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 type SyncStatus = "loading" | "synced" | "signed_out" | "error";
 
+/** Why the sync failed, so a degraded state can name its real cause (D19). */
+type SyncFailure = "email_taken" | "sync_failed";
+
+/**
+ * Where a refused address is sent, and the query the page reads to explain it.
+ * Mirrors `EMAIL_ALREADY_LINKED` in `convex/auth.ts`; server code cannot be
+ * imported into the browser bundle.
+ */
+export const EMAIL_ALREADY_LINKED = "EMAIL_ALREADY_LINKED";
+export const EMAIL_IN_USE_TARGET = "/sign-up?reason=email-taken";
+
 interface UserSyncState {
   status: SyncStatus;
+  failure: SyncFailure | null;
   retry: () => void;
 }
 
 const UserSyncContext = createContext<UserSyncState>({
   status: "loading",
+  failure: null,
   retry: () => {},
 });
 
@@ -38,8 +51,9 @@ export default function UserSyncProvider({
 }) {
   const { isLoaded, isSignedIn, user } = useUser();
   const syncUser = useMutation(api.users.syncUser);
-  const [syncFailed, setSyncFailed] = useState(false);
+  const [failure, setFailure] = useState<SyncFailure | null>(null);
   const router = useRouter();
+  const pathname = usePathname();
 
   // Primitives, not the Clerk user object: its identity churns between renders
   // and would re-fire the sync mutation.
@@ -59,14 +73,18 @@ export default function UserSyncProvider({
 
   const runSync = useCallback(() => {
     pushedProfile.current = profileKey;
-    syncUser({ email, name, imageUrl }).catch((error) => {
+    syncUser({ email, name, imageUrl }).catch((error: unknown) => {
       console.error("User sync failed:", error);
-      setSyncFailed(true);
+      setFailure(
+        String((error as Error)?.message ?? error).includes(EMAIL_ALREADY_LINKED)
+          ? "email_taken"
+          : "sync_failed"
+      );
     });
   }, [syncUser, email, name, imageUrl, profileKey]);
 
   const retry = useCallback(() => {
-    setSyncFailed(false);
+    setFailure(null);
     runSync();
   }, [runSync]);
 
@@ -78,9 +96,23 @@ export default function UserSyncProvider({
   // image backfilled.
   const identityHasLanded = syncState === "unsynced" || syncState === "synced";
 
+  // The sign-in and sign-up surfaces are the only places an unmirrored or
+  // refused visitor can act, so the auto-redirect never fights them.
+  const isAuthPage = pathname === "/sign-in" || pathname === "/sign-up";
+
   useEffect(() => {
-    if (isLoaded && !isSignedIn) router.push("/sign-in");
-  }, [isLoaded, isSignedIn, router]);
+    if (!isLoaded || isSignedIn || isAuthPage) return;
+    router.push("/sign-in");
+  }, [isLoaded, isSignedIn, isAuthPage, router]);
+
+  // A taken address is not a transient failure — retrying cannot free it — so
+  // leave the protected surface and explain it on the page that can act.
+  const sentToSignUp = useRef(false);
+  useEffect(() => {
+    if (failure !== "email_taken" || sentToSignUp.current) return;
+    sentToSignUp.current = true;
+    router.replace(EMAIL_IN_USE_TARGET);
+  }, [failure, router]);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
@@ -93,10 +125,10 @@ export default function UserSyncProvider({
   if (!isLoaded) status = "loading";
   else if (!isSignedIn) status = "signed_out";
   else if (syncState === "synced") status = "synced";
-  else if (syncState === "unsynced" && syncFailed) status = "error";
+  else if (syncState === "unsynced" && failure) status = "error";
   else status = "loading";
 
-  const value = useMemo(() => ({ status, retry }), [status, retry]);
+  const value = useMemo(() => ({ status, failure, retry }), [status, failure, retry]);
 
   if (!isLoaded) {
     return (

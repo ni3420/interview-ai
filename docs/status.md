@@ -27,6 +27,24 @@ Verified 2026-10-28:
   once per distinct profile. Verified on the local deployment: the row for
   `user_3LMq5nwrzveGxXIGbt0NlUQMJgR` went from `email: ""` / no name / no image to
   `email` + `name: "Sanjay"` + `imageUrl` set, `updatedAt` after `createdAt`.
+- Email uniqueness (2026-10-29, G-53): the local `users` table held 3 rows with 3
+  distinct `clerkId` values, two of them carrying the same address
+  (`s62463335@gmail.com`) because Clerk itself has two accounts for it — never two rows
+  for one Clerk identity, which the single-transaction upsert already prevents. `users`
+  now indexes `by_email` and `upsertUserFromIdentity` folds the address, refuses to
+  insert a second row for an owned one (`EMAIL_ALREADY_LINKED`) and keeps a returning row
+  on its own stored address. `RequireSyncedUser` names that rejection, withholds the
+  useless Retry and the provider replaces the URL with `/sign-up?reason=email-taken`, so a
+  refused visitor sees "This email address is already in use" on the sign-up page instead
+  of a dashboard. Not done: the pre-existing rows are still there, and since `email` is
+  partly client-declared until the Clerk JWT template carries the claim, this guarantees
+  a stable display key, not proven address ownership. Every downstream table was empty
+  when this was observed, so cleanup still costs no interview data.
+  Wiring that redirect exposed a second bug in the same effect: `UserSyncProvider` pushed
+  **every** signed-out visitor to `/sign-in`, including one already on `/sign-up`, so a
+  new account could not be created from that page. It now exempts `/sign-in` and
+  `/sign-up`. UNVERIFIED in a browser — no sign-up journey was run against the local stack
+  after this change.
 - Worker bridge: **6** `/worker/*` actions in `convex/http.ts` — `resume-complete`,
   `resume-failed`, `report-context`, `report-start`, `report-complete`, `report-failed` —
   authenticated by `X-Worker-Key`.
@@ -148,6 +166,21 @@ Q1 exit **0**; Q2 **0 errors, 9 warnings** (same 9); Q3 `bun run test` **189 pas
 new passing tests. Identity-argument check: `rg -n "args\.(clerkId|userId|ownerId)" convex`
 finds 0. Live probe: `convex run users:syncUser '{"clerkId":"user_victim", …}'` still fails
 closed with `ArgumentValidationError`.
+
+Re-run 2026-10-29 after the G-53 email-uniqueness fix (`by_email` + ownership check,
+named rejection state and the `/sign-up?reason=email-taken` redirect): Q1 exit **0**;
+Q2 `bun run lint` **0 errors, 9 warnings** (same 9); Q3 `bun run test` **198 passed,
+6 failed / 204 tests** — same 2 files, same 6 G-25 tests (`InterviewLobby.test.tsx` 3,
+`JobDescriptionInput.test.tsx` 3), plus 9 new passing tests: `test/userSync.test.ts`
+22 → 28 and `test/RequireSyncedUser.test.tsx` 10 → 13. Isolated run
+`bunx vitest run test/userSync.test.ts test/RequireSyncedUser.test.tsx` = **41 passed**.
+Q11 `bun run build` exit **0**, 16 routes — `/sign-up` stays ƒ (dynamic), which is what the
+new `useSearchParams` notice needs.
+Q16 schema/index check: not run — `bunx convex codegen` refuses without a
+`CONVEX_DEPLOYMENT` and the local backend on port 3210 was not restarted without approval,
+so the `by_email` index is **UNVERIFIED on the deployment**. A local query against a
+missing index errors at runtime, so the next `convex dev` push must be confirmed before the
+first sign-in on a fresh account.
 
 Load target for the release gate: **UNVERIFIED** — `N` concurrent interviews is not yet
 chosen or measured.

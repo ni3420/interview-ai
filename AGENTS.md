@@ -63,6 +63,7 @@ Run from the repo root unless a `cd` is shown. Report the exact command and outp
 - **S16** Declare every authenticated route in `client/src/proxy.ts`. Check: the matcher covers every non-public route; T16 passes. Violation: G-21, G-30.
 - **S17** Set CSP, HSTS, `X-Content-Type-Options`, `X-Frame-Options` and `Referrer-Policy`. Check: `rg -n "headers\(" client/next.config.ts` and `curl -I`. Violation: G-42.
 - **S18** Mirror identity before writing and wait for it before loading an authenticated route: `users` rows come only from `ctx.auth.getUserIdentity()`, and a protected route fires Convex calls only after `users.getSyncStatus` reports `synced`. Declared profile fields (`email`, `name`, `imageUrl`) may fill the row's display columns but never select the row. Check: `rg -n "RequireSyncedUser" client/src/components/layout/DashboardLayout.tsx` finds the gate, `rg -n "args\.(clerkId|userId|ownerId)" convex` finds 0 and `cd client && bunx vitest run test/userSync.test.ts test/RequireSyncedUser.test.tsx` passes. Violation: G-50, G-51.
+- **S19** One email address owns one `users` row. `upsertUserFromIdentity` folds the address (`trim().toLowerCase()`), looks it up through `by_email` and refuses to insert a second account for an owned address; a returning account never adopts an address another row owns. A visitor whose address is refused is named on the sign-up page and never reaches a protected surface — the provider sends them to `/sign-up?reason=email-taken`, and the signed-out redirect exempts `/sign-in` and `/sign-up` so that destination is usable. An empty address is never matched, otherwise the first email-less row would lock every later one out. Check: `rg -n "by_email" convex/schema.ts convex/auth.ts` finds both halves, `rg -n "email-taken" client/src` finds the redirect and the notice and `cd client && bunx vitest run test/userSync.test.ts` passes. Violation: G-53.
 
 ## Data and Convex (C, A)
 
@@ -77,6 +78,7 @@ Run from the repo root unless a `cd` is shown. Report the exact command and outp
 - **C9** Remove dead writers. Check: `rg -n "saveInterviewPlan|incrementQuestionIndex" client/src convex`. Violation: G-28.
 - **C10** Write derived state only where it is derived; clients may request, not assert. Check: `rg -n "api\.(reports\.saveReport|resume\.markResumeStatus)" client/src` = 0. Violation: G-32, G-33, G-44.
 - **C11** Ownership-check every stored foreign id in the same mutation. Check: `createInterview` fetches `resumeId` and compares `userId`. Violation: G-41.
+- **C12** Keep user profile data in the shape the real producer sends; do not trim, case-fold or otherwise canonicalise a field a security check depends on without recording it as a decision. Check: the field's producer and every reader of it are named in the code comment or debt row. Violation: G-53.
 - **A1** Keep packages independent; do not add a root workspace without unifying lockfiles. Check: no `workspaces` in root `package.json`.
 - **A2** Treat Convex as the source of truth; the AI service returns results only. Check: no Convex client in `apps/ai-service`.
 - **A3** Talk to Convex from the worker only through `/worker/*`. Check: `rg -n "convex" worker/src` shows HTTP calls only.
@@ -176,6 +178,7 @@ Run from the repo root unless a `cd` is shown. Report the exact command and outp
 - **T22** Missing Convex config fails the job. Check: worker tests.
 - **T23** A failed report shows D17 copy, never `error.message`. Check: missing.
 - **T24** A signed-in user never runs an authenticated Convex call before the `users` row exists, and a client cannot pass a `clerkId`. Check: `cd client && bunx vitest run test/userSync.test.ts test/RequireSyncedUser.test.tsx`. Violation: G-50.
+- **T25** A second Clerk account cannot take an email address an existing `users` row owns, a returning account cannot adopt one either, and a refused visitor is handed to the sign-up page with the reason visible rather than a dashboard. Check: `cd client && bunx vitest run test/userSync.test.ts test/RequireSyncedUser.test.tsx` — the "email uniqueness" block asserts the throw, the case-folded lookup and the empty-address exemption; the provider block asserts the `/sign-up?reason=email-taken` replace and that the signed-out redirect leaves that page alone. Violation: G-53.
 
 ## Debt register
 
@@ -233,6 +236,7 @@ Priorities: **Blocker** = security/data loss; **High** = blocks a flow or hides 
 | G-50 | Blocker | S1, S18 | `convex/auth.ts`, `client/src/components/layout/UserSyncProvider.tsx` | Fixed 2026-10-29: identity-derived `users` upsert in one transaction; `createInterview` writes its own owner row; protected routes wait on `users.getSyncStatus`. Residual: signed-in cold start unmeasured. | unassigned |
 | G-51 | High | S1, S10 | `convex/users.ts`, `client/src/components/layout/UserSyncProvider.tsx` | Fixed 2026-10-29: the Clerk JWT reaching Convex carries no email/name/picture claim, so `users.email` was written as `""` and `name`/`imageUrl` never landed. `syncUser` now takes declared profile fields (identity claims still win) and the provider re-pushes once per distinct profile, backfilling existing rows. Proper remedy: add those claims to the Clerk JWT template. | unassigned |
 | G-52 | High | S1 | Clerk Dashboard (not this repo) | Open: a first social sign-in returns "External Account was not found". Observed 2026-10-29; not yet diagnosed from code and not fixable here — needs the Clerk app's OAuth provider configuration. | unassigned |
+| G-53 | High | S1, S19, C12, D19 | `convex/schema.ts`, `convex/auth.ts`, `client/src/components/layout/UserSyncProvider.tsx`, `client/src/app/(auth)/sign-up/[[...sign-up]]/page.tsx` | Partially fixed 2026-10-29: three `users` rows shared one email. Two were the same address under different Clerk accounts; `by_email` + the ownership check in `upsertUserFromIdentity` now stop new duplicates, and a refused sign-in is redirected to `/sign-up?reason=email-taken` with the reason named — which also fixed the signed-out redirect bouncing visitors off `/sign-up` itself. Residual: the two pre-existing rows are still in the database, the index is not yet pushed to the local deployment, and `email` is partly client-declared until the Clerk JWT template carries the claim, so the guard is a display-key guarantee, not a proven ownership claim. | unassigned |
 
 ## Release gate
 
@@ -240,6 +244,7 @@ Every item must be demonstrated, not asserted.
 
 - [ ] G-01 closed; cross-account tests in `client/test/convex.test.ts` pass (T1).
 - [ ] G-50 closed under a real session: a signed-in deep link to `/interview/<id>/lobby` waits for `users.getSyncStatus` instead of firing against a missing row (T24 passes; the signed-in cold start is still unmeasured).
+- [ ] G-53 closed for the rows that already exist: `users` has no two rows sharing a folded email. The code now refuses new duplicates, the two rows on `s62463335@gmail.com` are still there and removing them means a Clerk-side merge plus a deletion this repo has not been authorised to make (T25 passes).
 - [ ] CI runs Q1–Q4, Q10, Q11 on every PR and is green (G-05).
 - [ ] Q12 returns 0; the AI service refuses to start without a key (G-22).
 - [ ] Every key comparison is constant-time; uploads are byte-validated (G-38, G-24).

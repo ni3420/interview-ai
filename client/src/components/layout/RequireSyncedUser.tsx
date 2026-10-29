@@ -13,7 +13,7 @@ const SYNC_WAIT_MS = 10_000;
  * account that has not been mirrored yet.
  */
 export function RequireSyncedUser({ children }: { children: ReactNode }) {
-  const { status, retry } = useUserSync();
+  const { status, failure, retry } = useUserSync();
   const [stalled, setStalled] = useState(false);
 
   // A wait with no end looks like a working page, so name it (D19).
@@ -26,28 +26,36 @@ export function RequireSyncedUser({ children }: { children: ReactNode }) {
   if (status === "synced") return <>{children}</>;
 
   if (status === "error" || stalled) {
+    // A taken address is on its way to the sign-up page, so this state names the
+    // reason without offering a Retry that would re-run the same rejection.
+    const emailTaken = failure === "email_taken";
     return (
       <div
         role="alert"
         className="flex min-h-64 flex-col items-center justify-center gap-3 p-8 text-center"
       >
         <p className="text-sm font-medium text-foreground">
-          Your account could not be prepared
+          {emailTaken
+            ? "This email address is already in use"
+            : "Your account could not be prepared"}
         </p>
         <p className="max-w-sm text-xs text-muted-foreground">
-          The interview backend did not confirm your profile. Check your
-          connection and retry before starting or opening an interview.
+          {emailTaken
+            ? "Only one account can use an email address. Taking you to sign up — use a different address or sign in with the account that already owns this one."
+            : "The interview backend did not confirm your profile. Check your connection and retry before starting or opening an interview."}
         </p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-1 gap-2"
-          onClick={retry}
-        >
-          <RefreshCw className="h-4 w-4" aria-hidden="true" />
-          Retry
-        </Button>
+        {!emailTaken && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-1 gap-2"
+            onClick={retry}
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Retry
+          </Button>
+        )}
       </div>
     );
   }

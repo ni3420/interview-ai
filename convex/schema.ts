@@ -9,7 +9,11 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_clerk_id", ["clerkId"]),
+  })
+    .index("by_clerk_id", ["clerkId"])
+    // One address, one account. Not unique: Convex has no unique index, and the
+    // rows written before this rule share addresses without breaking sign-in.
+    .index("by_email", ["email"]),
 
   interviews: defineTable({
     userId: v.id("users"),

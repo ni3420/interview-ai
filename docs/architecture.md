@@ -49,7 +49,7 @@ Next.js (3000)
 
 | Table | Key fields | Indexes | Notes |
 |---|---|---|---|
-| `users` | `clerkId`, `email`, `name`, `imageUrl` | `by_clerk_id` | No billing or plan fields exist. Written only from the verified JWT: `users.syncUser` (profile fields only, never an identity) and `interviews.createInterview` share `upsertUserFromIdentity` (G-01, G-50) |
+| `users` | `clerkId`, `email`, `name`, `imageUrl` | `by_clerk_id`, `by_email` | No billing or plan fields exist. Written only from the verified JWT: `users.syncUser` (profile fields only, never an identity) and `interviews.createInterview` share `upsertUserFromIdentity` (G-01, G-50). `by_email` is not a unique index — Convex has none — it is the lookup the one-address-one-account check in S19 uses (G-53) |
 | `interviews` | `userId`, `resumeId?`, `resumeText?`, `jobDescription`, `status` (`setup`/`in_progress`/`completed`/`failed`), `plan`, `currentQuestionIndex`, `durationMinutes`, timestamps | `by_user`, `by_user_status` | `plan` is `v.any()` — question plan is stored untyped |
 | `answers` | `interviewId`, `questionIndex`, `question`, `answer`, `followUpCount` | `by_interview` | No per-answer score; scoring lives in `reports` |
 | `resumes` | `userId`, `storageId`, `fileName`, `contentType`, `size`, `status` (`uploaded`/`processing`/`ready`/`failed`) | `by_user` | Blob in Convex storage |
@@ -72,7 +72,14 @@ not by an id supplied by the client.
    those are declared display values (S10), length-bounded and blank-rejected, and the
    row is still keyed by `identity.subject`, so a forged `clerkId` is rejected by the
    argument validator. Precedence is identity claim → declared value → stored value, so
-   claims win when the template is later fixed. `users.getSyncStatus` answers `anonymous`
+   claims win when the template is later fixed.
+   One email address owns one row (S19, G-53): `upsertUserFromIdentity` folds the address
+   with `trim().toLowerCase()` — `A@x.com` and `a@x.com` are the same account — searches
+   `by_email`, and throws `EMAIL_ALREADY_LINKED` rather than inserting a second row for an
+   address another row owns; a returning row keeps its own stored address instead of
+   adopting a contested one. An empty address is never matched, because rows written
+   before this rule have `email: ""` and matching blanks would lock every later
+   email-less sign-in out. `users.getSyncStatus` answers `anonymous`
    (token has not
    reached Convex yet), `unsynced` (identity, no row) or `synced`; `interviews.createInterview`
    creates the owner row in its own transaction, so an interview is never written without
@@ -81,12 +88,20 @@ not by an id supplied by the client.
    still waiting; mutations stay fail-closed.
 2. **Browser → Next.js.** `client/src/proxy.ts` (Clerk middleware) guards only
    `/dashboard(.*)` and `/interview(.*)`. `/reports` guards itself with a client effect.
-   `UserSyncProvider` in the root layout redirects **every** signed-out visitor to
-   `/sign-in`, including `/`, so the landing page is unreachable without a session (G-21).
+   `UserSyncProvider` in the root layout redirects a signed-out visitor to `/sign-in`,
+   except while already on `/sign-in` or `/sign-up` — those two are the surfaces the
+   visitor must reach to fix the problem, so the redirect exempts them (G-21, G-53).
+   A sync refused with `EMAIL_ALREADY_LINKED` is not retried: the provider replaces the
+   URL with `/sign-up?reason=email-taken`, `RequireSyncedUser` keeps the protected surface
+   closed through the navigation, and the sign-up page reads the query and shows
+   "This email address is already in use" with a link to `/sign-in` (G-53).
    `RequireSyncedUser`, applied inside `DashboardLayout`, holds `/dashboard`, `/reports`
    and every `/interview/*` page (setup, lobby, room) until `getSyncStatus` reports
    `synced`, so their queries and mutations never run against a missing row; a failed sync
-   shows a named retry state instead of an error boundary (G-50). `/dashboard` and
+   shows a named retry state instead of an error boundary (G-50). A sync rejected with
+   `EMAIL_ALREADY_LINKED` gets its own named state and no retry button — the page is only
+   the hand-off, because repeating the call cannot free an address another account owns
+   (G-53). `/dashboard` and
    `/reports` also skip their own page-level queries until `synced`, because those hooks
    run outside the gate's children. `UserSyncProvider` pushes the Clerk profile once per
    distinct profile — including over a row already reported `synced` — so a row created

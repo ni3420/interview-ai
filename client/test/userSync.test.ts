@@ -44,6 +44,23 @@ const clerkIdLookup = (ctx: ReturnType<typeof createMockCtx>) => {
   return (call?.[1] as (builder: typeof q) => { field: string; value: string })(q);
 };
 
+// The address an ownership check searched for, or undefined when it never ran.
+const emailLookup = (ctx: ReturnType<typeof createMockCtx>) => {
+  const call = ctx.db.withIndex.mock.calls.find(([name]) => name === "by_email");
+  // A missing lookup means the ownership check never ran, so `call?.[1]` below
+  // would throw "not a function" and hide that reason.
+  expect(call?.[0]).toBe("by_email");
+  return (call?.[1] as (builder: typeof q) => { field: string; value: string })(q);
+};
+
+const otherOwner = {
+  _id: "users-other",
+  clerkId: "user_other",
+  email: "abc@example.com",
+  createdAt: 1,
+  updatedAt: 1,
+};
+
 describe("Convex users sync (G-50, G-01)", () => {
   let ctx: ReturnType<typeof createMockCtx>;
 
@@ -200,6 +217,83 @@ describe("Convex users sync (G-50, G-01)", () => {
       await expect(syncUser(ctx, {})).rejects.toThrow("Unauthorized");
       expect(ctx.db.insert).not.toHaveBeenCalled();
       expect(ctx.db.patch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("syncUser email uniqueness (G-53: one email, one account)", () => {
+    it("refuses to create a second account for an address another account owns", async () => {
+      ctx.db.unique.mockResolvedValue(null);
+      ctx.db.first.mockResolvedValue(otherOwner);
+
+      await expect(syncUser(ctx, {})).rejects.toThrow("EMAIL_ALREADY_LINKED");
+      expect(ctx.db.insert).not.toHaveBeenCalled();
+      expect(ctx.db.patch).not.toHaveBeenCalled();
+    });
+
+    it("matches the address case-insensitively and stores it folded", async () => {
+      ctx.auth.getUserIdentity.mockResolvedValue(identity({ email: "  Abc@Example.COM " }));
+      ctx.db.unique.mockResolvedValue(null);
+      ctx.db.first.mockResolvedValue(null);
+      ctx.db.insert.mockResolvedValue("users-new");
+
+      await syncUser(ctx, {});
+
+      expect(emailLookup(ctx)).toEqual({ field: "email", value: "abc@example.com" });
+      const inserted = ctx.db.insert.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(inserted.email).toBe("abc@example.com");
+    });
+
+    it("keeps a returning account on its own address when another row claims the new one", async () => {
+      ctx.auth.getUserIdentity.mockResolvedValue(identity({ email: undefined, name: undefined }));
+      ctx.db.unique.mockResolvedValue(existingUser);
+      ctx.db.first.mockResolvedValue(otherOwner);
+
+      await syncUser(ctx, { email: "Abc@Example.com", name: "Renamed" });
+
+      const patched = ctx.db.patch.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(patched.email).toBe("stale@example.com");
+      // Refusing the address must not refuse the rest of the profile backfill.
+      expect(patched.name).toBe("Renamed");
+    });
+
+    it("lets a returning account keep the address its own row already holds", async () => {
+      ctx.db.unique.mockResolvedValue(existingUser);
+      ctx.db.first.mockResolvedValue({ ...existingUser, email: "abc@example.com" });
+
+      await syncUser(ctx, {});
+
+      const patched = ctx.db.patch.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(patched.email).toBe("abc@example.com");
+    });
+
+    it("adopts a fresh address when no other row owns it", async () => {
+      ctx.auth.getUserIdentity.mockResolvedValue(identity({ email: undefined }));
+      ctx.db.unique.mockResolvedValue(existingUser);
+      ctx.db.first.mockResolvedValue(null);
+
+      await syncUser(ctx, { email: "New@Example.com" });
+
+      expect(emailLookup(ctx)).toEqual({ field: "email", value: "new@example.com" });
+      const patched = ctx.db.patch.mock.calls[0]?.[1] as Record<string, unknown>;
+      expect(patched.email).toBe("new@example.com");
+    });
+
+    it("enforces nothing for an identity with no address", async () => {
+      ctx.auth.getUserIdentity.mockResolvedValue({
+        subject: "user_abc",
+        tokenIdentifier: "https://issuer.example#user_abc",
+        issuer: "https://issuer.example",
+      });
+      ctx.db.unique.mockResolvedValue(null);
+      ctx.db.insert.mockResolvedValue("users-new");
+
+      await syncUser(ctx, {});
+
+      // Rows with no address must not be matched against each other, or the
+      // first email-less sign-in would lock every later one out.
+      expect(ctx.db.withIndex.mock.calls.map(([name]) => name)).toEqual([
+        "by_clerk_id",
+      ]);
     });
   });
 

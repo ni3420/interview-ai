@@ -1,8 +1,43 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { SignUp } from "@clerk/nextjs";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { AlertCircle, ArrowLeft, Sparkles } from "lucide-react";
+
+/**
+ * Shown when the backend refused to mirror this browser's account because the
+ * email address already belongs to another one — see `EMAIL_IN_USE_TARGET`.
+ */
+function EmailInUseNotice() {
+  const params = useSearchParams();
+  if (params.get("reason") !== "email-taken") return null;
+
+  return (
+    <div
+      role="alert"
+      className="mb-4 flex items-start gap-2.5 rounded-xl bg-destructive/10 p-3.5 ring-1 ring-destructive/20"
+    >
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-destructive">
+          This email address is already in use.
+        </p>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          One account can own an email address.{" "}
+          <Link
+            href="/sign-in"
+            className="font-semibold text-primary underline-offset-2 hover:underline"
+          >
+            Sign in with the existing account
+          </Link>{" "}
+          or create one with a different email.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function SignUpPage() {
   return (
@@ -44,6 +79,9 @@ export default function SignUpPage() {
 
         {/* Customized Modern Clerk Sign-Up Component */}
         <div className="w-full">
+          <Suspense fallback={null}>
+            <EmailInUseNotice />
+          </Suspense>
           <SignUp
             appearance={{
               elements: {
