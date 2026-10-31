@@ -165,7 +165,9 @@ export default defineSchema({
     ),
     uploadedAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_user", ["userId"]),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
 
   reports: defineTable({
     interviewId: v.id("interviews"),
@@ -232,6 +234,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_interview", ["interviewId"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
 });
 

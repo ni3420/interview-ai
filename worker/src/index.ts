@@ -5,6 +5,13 @@ import {
   processReportJob,
   reportEvaluationTerminalFailure,
 } from "./report-processor";
+import {
+  recordActive,
+  recordCompleted,
+  recordFailed,
+  recordStalled,
+  snapshot,
+} from "./metrics";
 import { createRedisConnection } from "./redis";
 
 function log(message: string, meta?: Record<string, unknown>): void {
@@ -43,11 +50,27 @@ const reportWorker = new Worker(config.reportQueueName, processReportJob, {
 
 worker.on("ready", () => log("worker ready", { queue: config.queueName }));
 
-worker.on("completed", (job, result) =>
-  log("job completed", { jobId: job.id, result })
-);
+worker.on("active", () => recordActive("resume"));
+
+worker.on("completed", (job, result) => {
+  recordCompleted("resume");
+  log("job completed", { jobId: job.id, result });
+});
+
+worker.on("stalled", (jobId) => {
+  recordStalled("resume");
+  console.error(
+    JSON.stringify({
+      level: "error",
+      message: "resume job stalled",
+      queue: config.queueName,
+      jobId,
+    })
+  );
+});
 
 worker.on("failed", (job, error) => {
+  recordFailed("resume");
   console.error(
     JSON.stringify({
       level: "error",
@@ -78,11 +101,27 @@ reportWorker.on("ready", () =>
   log("report worker ready", { queue: config.reportQueueName })
 );
 
-reportWorker.on("completed", (job, result) =>
-  log("report job completed", { jobId: job.id, result })
-);
+reportWorker.on("active", () => recordActive("report"));
+
+reportWorker.on("completed", (job, result) => {
+  recordCompleted("report");
+  log("report job completed", { jobId: job.id, result });
+});
+
+reportWorker.on("stalled", (jobId) => {
+  recordStalled("report");
+  console.error(
+    JSON.stringify({
+      level: "error",
+      message: "report job stalled",
+      queue: config.reportQueueName,
+      jobId,
+    })
+  );
+});
 
 reportWorker.on("failed", (job, error) => {
+  recordFailed("report");
   console.error(
     JSON.stringify({
       level: "error",
@@ -110,8 +149,19 @@ reportWorker.on("error", (error) => {
   );
 });
 
+// One line a minute is enough to see a worker that has stopped draining work
+// or is failing every job. `unref` keeps it from holding the process open.
+const heartbeat = setInterval(() => {
+  log("worker heartbeat", {
+    uptimeSeconds: Math.round(process.uptime()),
+    queues: snapshot(),
+  });
+}, 60_000);
+heartbeat.unref();
+
 async function shutdown(signal: string): Promise<void> {
   log("shutting down", { signal });
+  clearInterval(heartbeat);
   try {
     await Promise.all([worker.close(), reportWorker.close()]);
     await Promise.all([connection.quit(), reportConnection.quit()]);

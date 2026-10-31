@@ -134,6 +134,7 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Report generation | working | queue + job state + validation; partial report possible (G-20) |
 | Report evidence | **missing** | no quote field; overall score not derived (G-20) |
 | Report retry | working | explicit Retry after failure (`report/page.tsx:146`) |
+| Stuck-job recovery | working | 10-minute cron fails stale `reportJobs`/`resumes` (`convex/maintenance.ts`); operator requeue CLI in `worker/src/requeue.ts` |
 | Billing | **missing** | empty Stripe dirs, no plan fields (G-03) |
 | Error monitoring | **missing** | no `Sentry.init` (G-02) |
 | CI | **missing** | no `.github/` (G-05) |
@@ -292,7 +293,7 @@ Failure matrix. Detection must be server-side; a toast alone is not detection.
 | Captions stop | **none** | none | none | partial transcript | detect gap, banner, keep local buffer (G-36) |
 | Tab close | none | none | none | interview stuck `in_progress` | server deadline closes it (G-37) |
 | Token expiry | join error | none | none | reconnect fails | mint for duration + 10 min (G-26) |
-| Worker crash | BullMQ | 3× résumé, 2× report | terminal callback | job failed | keep; add DLQ visibility (G-19) |
+| Worker crash | BullMQ | 3× résumé, 2× report | terminal callback | job failed | kept; stale sweep + `requeue` CLI close the loop (G-19) |
 | Report partial | none | none | none | short report | reject when scores ≠ answers (G-20) |
 | Duplicate save | upsert | — | — | — | keep; add idempotency key (W9) |
 

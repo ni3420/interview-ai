@@ -11,8 +11,10 @@
 import type * as _lib_workerAuth from "../_lib/workerAuth.js";
 import type * as answers from "../answers.js";
 import type * as auth from "../auth.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as interviews from "../interviews.js";
+import type * as maintenance from "../maintenance.js";
 import type * as rateLimits from "../rateLimits.js";
 import type * as reports from "../reports.js";
 import type * as resume from "../resume.js";
@@ -30,8 +32,10 @@ declare const fullApi: ApiFromModules<{
   "_lib/workerAuth": typeof _lib_workerAuth;
   answers: typeof answers;
   auth: typeof auth;
+  crons: typeof crons;
   http: typeof http;
   interviews: typeof interviews;
+  maintenance: typeof maintenance;
   rateLimits: typeof rateLimits;
   reports: typeof reports;
   resume: typeof resume;
