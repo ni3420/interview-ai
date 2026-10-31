@@ -69,9 +69,10 @@ passing item is the documentation drift script. Everything else fails:
 7. **Little is observed.** Error monitoring is opt-in through
    `src/instrumentation.ts` and `instrumentation-client.ts` (G-02) but has not been
    exercised against a real DSN. Report-job latency (enqueue → start → complete) is
-   recorded in Convex and worker terminal logs (G-19, done 2026-10-31), and plan/report
-   model calls log token usage and an optional cost estimate (done 2026-10-31); live room
-   turn latency and Gemini Live usage are still missing. CI now exists
+   recorded in Convex and worker terminal logs (G-19, done 2026-10-31), plan/report
+   model calls log token usage and an optional cost estimate (done 2026-10-31), and the
+   room logs `turn.response` from caption timestamps (done 2026-10-31, no live sample
+   yet); Gemini Live usage is still missing. CI now exists
    (G-05) and the client ships baseline security headers from `next.config.ts` (G-42; a
    full origin-scoped CSP is still deferred). Per-user fixed-window budgets now cover
    interview creation, resume/report enqueueing and agent dispatch (G-06).
@@ -246,7 +247,7 @@ Measured 2026-10-28 on this machine:
 | Static payload (raw, all chunks) | **2.4 MB** | `du -sh client/.next/static` |
 | Largest chunk (raw) | **629 KB** | `find .next/static -name '*.js' -printf ...` |
 | gzip / per-route First Load JS | not emitted by this Next 16.4 build | — |
-| Runtime latency (join, first turn, turn) | **UNVERIFIED** — no hook in the live room | Q9 = partial |
+| Runtime latency (join, first turn, turn) | **instrumented, no live sample** | room `room timing` logs: `room.token`, `room.join`, `room.dispatch`, `agent.audible`, `turn.response` |
 | Report latency (enqueue → start → complete) | **instrumented, no production sample yet** | Convex `reportJobs` + worker terminal logs |
 
 Budgets to hold (from F9): dispatch ≤ 1.5 s, audible ≤ 5 s, turn ≤ 2.5 s, caption→row ≤ 2 s,
@@ -255,9 +256,15 @@ report enqueue ≤ 0.5 s, queued→processing ≤ 10 s, text model call ≤ 120 
 Report latencies are now queryable: `reportJobs.enqueuedAt`, `startedAt`, `completedAt`
 (set on success and on terminal failure) give queued→processing and processing→complete;
 worker `completed`/`failed` lines carry `queueWaitMs`, `processingMs` and `endToEndMs`.
-Live room turn latency still has no producer. Derived p50/p95 requires ≥ 100 sessions;
-until then, any p95 claim is unverifiable. Bundle target: set after gzip
-measurement; do not invent one now.
+Live room turn latency is now produced in the browser: on each new candidate caption the
+room records the caption `end_time`, and the next interviewer caption logs
+`{stage:"turn.response", durationMs, turnLatencyMs, arrivalMs}` from its `start_time`
+(`client/src/features/interview/room/room-timing.ts`). The media-timestamp delta is used
+when it is 0–60 s, otherwise caption arrival time. Because Stream emits a caption only
+after the interviewer's ASR finalizes it, the value is an upper bound on the agent's
+response time, not just model latency; it has not yet been observed on a real call.
+Derived p50/p95 requires ≥ 100 sessions; until then, any p95 claim is unverifiable. Bundle
+target: set after gzip measurement; do not invent one now.
 
 ---
 
@@ -424,10 +431,11 @@ Sentry init through `instrumentation.ts` and `instrumentation-client.ts` (G-02 �
 2026-10-31, opt-in); report-job latency fields (G-19 — done 2026-10-31); CI for Q1–Q4,
 Q10, Q11, Q13 (G-05 — done 2026-10-31); fix the 6 red client tests (G-25 — done
 2026-10-31); fix ruff config (G-47 — config loads 2026-10-31, ~790 findings remain as lint
-debt); model-call cost events (done 2026-10-31). Acceptance: an induced error produces
-exactly one event; Q9 has data for every F9 row; CI is green on a PR; a cost-per-interview
-number can be computed from logs. Remaining for acceptance: live room turn latency (Q9's
-last row). Effort: M.
+debt); model-call cost events (done 2026-10-31); room turn-latency log (done 2026-10-31).
+Acceptance: an induced error produces exactly one event; Q9 has data for every F9 row; CI
+is green on a PR; a cost-per-interview number can be computed from logs. Remaining for
+acceptance: a live-call latency sample (join, audible and turn) and Gemini Live
+audio-seconds usage. Effort: M.
 
 Model usage is logged by the AI service as one `model usage` JSON line per successful
 call: `operation`, `interviewId` (when supplied), `provider`, `model`, `promptTokens`,

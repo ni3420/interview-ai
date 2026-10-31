@@ -5,7 +5,11 @@ import type { Call } from "@stream-io/video-react-sdk";
 import { Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AI_INTERVIEWER_ID, AI_INTERVIEWER_NAME } from "./constants";
-import { logAgentAudibleOnce } from "./room-timing";
+import {
+  logAgentAudibleOnce,
+  markCandidateTurnEnd,
+  markInterviewerTurnStart,
+} from "./room-timing";
 
 export type TranscriptSpeakerRole = "interviewer" | "candidate" | "unknown";
 
@@ -226,7 +230,12 @@ export function TranscriptionPanel({
 
       if (!isUpdate) {
         seenUtterancesRef.current.add(utteranceKey);
-        if (isInterviewer(item)) logAgentAudibleOnce();
+        if (isInterviewer(item)) {
+          logAgentAudibleOnce();
+          markInterviewerTurnStart(item.start);
+        } else if (item.speakerRole === "candidate") {
+          markCandidateTurnEnd(item.end);
+        }
         onTranscriptRef.current?.(item);
       }
     };

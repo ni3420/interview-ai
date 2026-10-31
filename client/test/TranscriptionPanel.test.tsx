@@ -5,6 +5,7 @@ import {
   TranscriptionPanel,
   type TranscriptItem,
 } from "@/features/interview/room/transcription-panel";
+import { startJoinTiming } from "@/features/interview/room/room-timing";
 
 type CaptionHandler = (event: {
   closed_caption?: {
@@ -12,9 +13,15 @@ type CaptionHandler = (event: {
     text?: string;
     speaker_id?: string;
     start_time?: string;
+    end_time?: string;
     user?: { id?: string; name?: string };
   };
 }) => void;
+
+interface RoomTimingEvent {
+  stage: string;
+  durationMs: number;
+}
 
 function createFakeCall() {
   const handlers = new Set<CaptionHandler>();
@@ -242,5 +249,43 @@ describe("TranscriptionPanel", () => {
     expect(handlerCount()).toBe(1);
     unmount();
     expect(handlerCount()).toBe(0);
+  });
+
+  it("logs the turn latency from candidate speech end to the reply", () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      startJoinTiming();
+      const { call, emit } = createFakeCall();
+      render(<TranscriptionPanel call={call} candidateId="user_1" />);
+
+      act(() => {
+        emit({
+          closed_caption: {
+            id: "a-1",
+            text: "I built several design systems.",
+            speaker_id: "user_1",
+            start_time: "2026-01-01T10:00:00.000Z",
+            end_time: "2026-01-01T10:00:01.000Z",
+          },
+        });
+        emit({
+          closed_caption: {
+            id: "q-2",
+            text: "What was the hardest part?",
+            start_time: "2026-01-01T10:00:02.500Z",
+            user: { id: "ai-interviewer", name: "AI Interviewer" },
+          },
+        });
+      });
+
+      const events = info.mock.calls.map(
+        ([line]) => JSON.parse(String(line)) as RoomTimingEvent
+      );
+      expect(events.find((event) => event.stage === "turn.response")).toEqual(
+        expect.objectContaining({ stage: "turn.response", durationMs: 1500 })
+      );
+    } finally {
+      info.mockRestore();
+    }
   });
 });
