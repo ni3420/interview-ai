@@ -2,6 +2,7 @@ import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
+from app.core.metrics import record_usage
 
 
 class OllamaProvider:
@@ -79,6 +80,13 @@ class OllamaProvider:
         text = (data.get("response") or "").strip()
         if not text:
             raise ValueError("Empty response from Ollama")
+
+        record_usage(
+            provider="ollama",
+            model=settings.ollama_model,
+            prompt_tokens=data.get("prompt_eval_count"),
+            completion_tokens=data.get("eval_count"),
+        )
         return text
 
 

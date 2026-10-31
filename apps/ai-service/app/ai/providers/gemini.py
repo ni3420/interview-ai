@@ -3,6 +3,7 @@ from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.core.config import settings
+from app.core.metrics import record_usage
 
 
 class GeminiProvider:
@@ -50,6 +51,23 @@ class GeminiProvider:
         )
         if not response.text:
             raise ValueError("Empty response from Gemini")
+
+        usage = response.usage_metadata
+        candidates = getattr(usage, "candidates_token_count", None)
+        thoughts = getattr(usage, "thoughts_token_count", None)
+        # Thinking tokens are billed as output but are not part of the visible
+        # candidate text, so include them in the completion count.
+        completion = (
+            None
+            if candidates is None and thoughts is None
+            else (candidates or 0) + (thoughts or 0)
+        )
+        record_usage(
+            provider="gemini",
+            model=settings.gemini_model,
+            prompt_tokens=getattr(usage, "prompt_token_count", None),
+            completion_tokens=completion,
+        )
         return response.text.strip()
 
 

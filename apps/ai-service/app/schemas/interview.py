@@ -5,6 +5,9 @@ from typing import Optional
 class InterviewPlanRequest(BaseModel):
     resume_text: str = Field(..., min_length=100, description="Extracted text from resume")
     job_description: str = Field(..., min_length=50, description="Job description text")
+    # Optional so older producers keep working; when present it attributes the
+    # model-usage event to an interview for cost accounting.
+    interview_id: str | None = Field(default=None, description="Convex interview id")
 
 
 class InterviewPlanResponse(BaseModel):

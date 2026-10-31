@@ -180,6 +180,8 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
       {
         resume_text: resumeContext,
         job_description: payload.jobDescription,
+        // Attributes the AI service's usage/cost event to this interview.
+        interview_id: payload.interviewId,
       },
       config.aiServiceApiKey
     );

@@ -68,9 +68,10 @@ passing item is the documentation drift script. Everything else fails:
    returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
 7. **Little is observed.** Error monitoring is opt-in through
    `src/instrumentation.ts` and `instrumentation-client.ts` (G-02) but has not been
-   exercised against a real DSN. Report-job latency (enqueue → start → complete) is now
-   recorded in Convex and in worker terminal logs (G-19, done 2026-10-31); live room turn
-   latency and model token/cost events are still missing. CI now exists
+   exercised against a real DSN. Report-job latency (enqueue → start → complete) is
+   recorded in Convex and worker terminal logs (G-19, done 2026-10-31), and plan/report
+   model calls log token usage and an optional cost estimate (done 2026-10-31); live room
+   turn latency and Gemini Live usage are still missing. CI now exists
    (G-05) and the client ships baseline security headers from `next.config.ts` (G-42; a
    full origin-scoped CSP is still deferred). Per-user fixed-window budgets now cover
    interview creation, resume/report enqueueing and agent dispatch (G-06).
@@ -230,8 +231,8 @@ Root causes worth naming because they explain several rows at once:
    Python dict, so reload, tab close, token expiry and agent failure have no authoritative
    record (G-13, G-26, G-34, G-37).
 3. **No measurement layer.** Without timing, token counts and error events, latency and
-   cost targets cannot be set honestly (G-02). Report timing now exists (G-19); live room
-   latency and token/cost counters are still missing.
+   cost targets cannot be set honestly (G-02). Report timing (G-19) and plan/report token
+   usage now exist; live room latency and Gemini Live usage are still missing.
 
 ---
 
@@ -423,10 +424,19 @@ Sentry init through `instrumentation.ts` and `instrumentation-client.ts` (G-02 �
 2026-10-31, opt-in); report-job latency fields (G-19 — done 2026-10-31); CI for Q1–Q4,
 Q10, Q11, Q13 (G-05 — done 2026-10-31); fix the 6 red client tests (G-25 — done
 2026-10-31); fix ruff config (G-47 — config loads 2026-10-31, ~790 findings remain as lint
-debt); model-call cost events. Acceptance: an induced error produces exactly one event; Q9
-has data for every F9 row; CI is green on a PR; a cost-per-interview number can be computed
-from logs. Remaining for acceptance: live room turn latency (Q9's last row) and token/cost
-events. Effort: M.
+debt); model-call cost events (done 2026-10-31). Acceptance: an induced error produces
+exactly one event; Q9 has data for every F9 row; CI is green on a PR; a cost-per-interview
+number can be computed from logs. Remaining for acceptance: live room turn latency (Q9's
+last row). Effort: M.
+
+Model usage is logged by the AI service as one `model usage` JSON line per successful
+call: `operation`, `interviewId` (when supplied), `provider`, `model`, `promptTokens`,
+`completionTokens`, `totalTokens`, `estimatedCostUsd`. The worker passes `interview_id` on
+plan and report requests, so cost per interview is the sum of `estimatedCostUsd` for that
+`interviewId`. Prices come only from operator-set `GEMINI_*_PRICE_PER_1M` values; unset
+prices log `null` rather than an invented number, and local Ollama calls log `0`. Gemini
+thinking tokens are counted as completion tokens. Not covered: Gemini Live (realtime agent)
+usage and local embeddings, so the number is a lower bound for the full interview.
 
 ### Phase 5 — hardening and design (Medium)
 

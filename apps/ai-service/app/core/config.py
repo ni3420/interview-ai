@@ -22,6 +22,13 @@ class Settings(BaseSettings):
     gemini_temperature: float = 0.7
     gemini_max_tokens: int = 2048
 
+    # Token prices in USD per 1M tokens, used only to estimate model cost in
+    # usage logs. There is no default: pricing changes, so an unset value
+    # yields ``estimatedCostUsd: null`` instead of an invented number. Local
+    # Ollama calls are reported as 0.
+    gemini_input_price_per_1m: float | None = None
+    gemini_output_price_per_1m: float | None = None
+
     # Model provider selection. "gemini" is the optional remote provider;
     # "ollama" uses local inference so the service works without cloud keys.
     ai_provider: str = "gemini"

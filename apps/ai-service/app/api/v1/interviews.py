@@ -14,7 +14,7 @@ from app.ai.providers.factory import get_llm_provider
 from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
 from app.ai.prompts.report import REPORT_PROMPT_VERSION
 from app.core.config import settings
-from app.core.metrics import timed
+from app.core.metrics import timed, usage_context
 from app.core.rubric import RUBRIC_VERSION, RubricError
 from app.schemas.report import ReportRequest, ReportResponse
 from app.services.report_evaluation import ReportEvaluationError, build_report
@@ -58,12 +58,15 @@ async def generate_interview_plan(request: InterviewPlanRequest):
     )
     try:
         provider = _configured_provider()
-        with timed(
-            "llm.generate",
-            conversation="plan",
-            configuredProvider=provider,
-            configuredModel=_configured_model(provider),
-            promptChars=len(prompt),
+        with (
+            usage_context("plan", interview_id=request.interview_id),
+            timed(
+                "llm.generate",
+                conversation="plan",
+                configuredProvider=provider,
+                configuredModel=_configured_model(provider),
+                promptChars=len(prompt),
+            ),
         ):
             response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
@@ -98,12 +101,15 @@ async def generate_next_question(request: NextQuestionRequest):
     )
     try:
         provider = _configured_provider()
-        with timed(
-            "llm.generate",
-            conversation="next_question",
-            configuredProvider=provider,
-            configuredModel=_configured_model(provider),
-            promptChars=len(prompt),
+        with (
+            usage_context("next_question"),
+            timed(
+                "llm.generate",
+                conversation="next_question",
+                configuredProvider=provider,
+                configuredModel=_configured_model(provider),
+                promptChars=len(prompt),
+            ),
         ):
             response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
@@ -138,15 +144,18 @@ async def generate_interview_report(request: ReportRequest):
     """
     try:
         provider = _configured_provider()
-        with timed(
-            "llm.generate",
-            conversation="report",
-            configuredProvider=provider,
-            configuredModel=_configured_model(provider),
-            promptVersion=REPORT_PROMPT_VERSION,
-            rubricVersion=RUBRIC_VERSION,
-            segmentCount=len(request.segments),
-            questionCount=len(request.qa_pairs),
+        with (
+            usage_context("report", interview_id=request.interview_id),
+            timed(
+                "llm.generate",
+                conversation="report",
+                configuredProvider=provider,
+                configuredModel=_configured_model(provider),
+                promptVersion=REPORT_PROMPT_VERSION,
+                rubricVersion=RUBRIC_VERSION,
+                segmentCount=len(request.segments),
+                questionCount=len(request.qa_pairs),
+            ),
         ):
             return await build_report(request, provider=get_llm_provider())
     except RubricError as error:
@@ -191,12 +200,15 @@ async def evaluate_interview(request: EvaluationRequest):
     )
     try:
         provider = _configured_provider()
-        with timed(
-            "llm.generate",
-            conversation="evaluate",
-            configuredProvider=provider,
-            configuredModel=_configured_model(provider),
-            promptChars=len(prompt),
+        with (
+            usage_context("evaluate"),
+            timed(
+                "llm.generate",
+                conversation="evaluate",
+                configuredProvider=provider,
+                configuredModel=_configured_model(provider),
+                promptChars=len(prompt),
+            ),
         ):
             response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)

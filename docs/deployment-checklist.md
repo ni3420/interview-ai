@@ -107,6 +107,7 @@ npx convex env set WORKER_SERVICE_KEY <generated-32-byte-hex>
 | `CORS_ORIGINS` | yes | JSON list; set the real client origin, not `localhost` |
 | `AI_PROVIDER` / `AI_FALLBACK_PROVIDER` | yes — set explicitly | config default is `gemini` while `.env.example` says `ollama`; do not rely on the default |
 | `GEMINI_API_KEY` | yes for live interviews | Gemini Live needs it even when `AI_PROVIDER=ollama`; D-05 gates production use |
+| `GEMINI_INPUT_PRICE_PER_1M`, `GEMINI_OUTPUT_PRICE_PER_1M` | optional | USD per 1M tokens, checked against the provider's current pricing page; unset logs `estimatedCostUsd: null` |
 | `OLLAMA_BASE_URL`, `OLLAMA_MODEL` | as configured | must be reachable from the container/host |
 | `QDRANT_URL`, `QDRANT_COLLECTION` | yes | collection must exist with vector size = `EMBEDDING_DIMENSION` (768) |
 | `QDRANT_API_KEY` | if the cluster requires it | empty only for an unauthenticated local instance |
