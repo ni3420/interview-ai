@@ -11,6 +11,24 @@ function log(message: string, meta?: Record<string, unknown>): void {
   console.log(JSON.stringify({ level: "info", message, ...meta }));
 }
 
+function assertServiceKeys(): void {
+  const missing: string[] = [];
+  if (!config.aiServiceApiKey) missing.push("AI_SERVICE_API_KEY");
+  if (!config.workerServiceKey) missing.push("WORKER_SERVICE_KEY");
+  if (missing.length === 0) return;
+
+  console.error(
+    JSON.stringify({
+      level: "error",
+      message: "worker is missing required service keys; refusing to start",
+      missing,
+    })
+  );
+  process.exit(1);
+}
+
+assertServiceKeys();
+
 const connection = createRedisConnection();
 const worker = new Worker(config.queueName, processResumeJob, {
   connection,

@@ -1,7 +1,7 @@
 import { UnrecoverableError, type Job } from "bullmq";
 import { z } from "zod";
 import { config } from "./config";
-import { HttpError, postJson } from "./http";
+import { HttpError, postJson, postSignedJson } from "./http";
 import { reportJobSchema } from "./job";
 import { logEvent, logStage, queueWaitMs } from "./log";
 import { isTerminalFailure } from "./processor";
@@ -291,7 +291,7 @@ async function requestEvaluation(
 ): Promise<ReportEvaluation> {
   let raw: unknown;
   try {
-    raw = await postJson<unknown>(
+    raw = await postSignedJson<unknown>(
       `${config.aiServiceUrl}/v1/interviews/report`,
       {
         interview_id: context.interviewId,
@@ -312,7 +312,7 @@ async function requestEvaluation(
           speaker_confidence: segment.speakerConfidence,
         })),
       },
-      { "X-API-Key": config.aiServiceApiKey },
+      config.aiServiceApiKey,
       config.reportAiRequestTimeoutMs
     );
   } catch (error) {

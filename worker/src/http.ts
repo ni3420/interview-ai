@@ -1,7 +1,11 @@
+import { createHash, createHmac } from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import { URL } from "node:url";
 import { config } from "./config";
+
+export const SERVICE_TIMESTAMP_HEADER = "X-Service-Timestamp";
+export const SERVICE_SIGNATURE_HEADER = "X-Service-Signature";
 
 /** HTTP failure with the response body preserved for stable error-code mapping. */
 export class HttpError extends Error {
@@ -14,23 +18,47 @@ export class HttpError extends Error {
   }
 }
 
+export interface ServiceSignature {
+  timestamp: string;
+  signature: string;
+}
+
 /**
- * Minimal JSON POST helper.
+ * Sign a request with the shared service secret.
  *
- * Deliberately does NOT use the global `fetch`: undici applies a 5 minute
- * `headersTimeout`, which a slow local model (minutes per plan or evaluation)
- * can exceed even though the request is healthy. This uses a single total
- * timeout instead.
+ * The canonical string must stay byte-identical to
+ * `build_canonical_request` in `apps/ai-service/app/api/deps.py`:
+ * `timestamp\nMETHOD\n/path?query\nsha256_hex(body)`.
  */
-export function postJson<TResponse>(
+export function signServiceRequest(params: {
+  secret: string;
+  method: string;
+  pathWithQuery: string;
+  payload: string;
+  /** Fixed clock for cross-language test vectors. */
+  timestampSeconds?: number;
+}): ServiceSignature {
+  const timestamp = String(
+    params.timestampSeconds ?? Math.floor(Date.now() / 1000)
+  );
+  const bodyDigest = createHash("sha256")
+    .update(params.payload, "utf8")
+    .digest("hex");
+  const canonical = `${timestamp}\n${params.method.toUpperCase()}\n${params.pathWithQuery}\n${bodyDigest}`;
+  const signature = createHmac("sha256", params.secret)
+    .update(canonical, "utf8")
+    .digest("hex");
+  return { timestamp, signature };
+}
+
+function sendJson<TResponse>(
   url: string,
-  body: unknown,
+  payload: string,
   headers: Record<string, string>,
-  timeoutMs: number = config.aiRequestTimeoutMs
+  timeoutMs: number
 ): Promise<TResponse> {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
-    const payload = JSON.stringify(body);
     const client = target.protocol === "https:" ? https : http;
 
     const request = client.request(
@@ -82,4 +110,49 @@ export function postJson<TResponse>(
     request.write(payload);
     request.end();
   });
+}
+
+/**
+ * Minimal JSON POST helper.
+ *
+ * Deliberately does NOT use the global `fetch`: undici applies a 5 minute
+ * `headersTimeout`, which a slow local model (minutes per plan or evaluation)
+ * can exceed even though the request is healthy. This uses a single total
+ * timeout instead.
+ */
+export function postJson<TResponse>(
+  url: string,
+  body: unknown,
+  headers: Record<string, string>,
+  timeoutMs: number = config.aiRequestTimeoutMs
+): Promise<TResponse> {
+  return sendJson<TResponse>(url, JSON.stringify(body), headers, timeoutMs);
+}
+
+/** JSON POST to the AI service, authenticated with a timestamped HMAC. */
+export function postSignedJson<TResponse>(
+  url: string,
+  body: unknown,
+  secret: string,
+  timeoutMs: number = config.aiRequestTimeoutMs,
+  timestampSeconds?: number
+): Promise<TResponse> {
+  const payload = JSON.stringify(body);
+  const target = new URL(url);
+  const { timestamp, signature } = signServiceRequest({
+    secret,
+    method: "POST",
+    pathWithQuery: `${target.pathname}${target.search}`,
+    payload,
+    timestampSeconds,
+  });
+  return sendJson<TResponse>(
+    url,
+    payload,
+    {
+      [SERVICE_TIMESTAMP_HEADER]: timestamp,
+      [SERVICE_SIGNATURE_HEADER]: signature,
+    },
+    timeoutMs
+  );
 }

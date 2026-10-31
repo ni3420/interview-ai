@@ -2,16 +2,17 @@ import { auth } from "@clerk/nextjs/server";
 import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
+import { signServiceRequest } from "@/lib/service-auth";
 
 // Convex and the AI service client need the Node.js runtime.
 export const runtime = "nodejs";
 
 const CALL_TYPE = "default";
 
-// Server-only configuration. The API key never reaches the browser. Note we
-// use AI_SERVICE_URL (not NEXT_PUBLIC_AI_SERVICE_URL): the public var is the
-// browser's escape hatch in `lib/ai-service.ts`, and setting it would make the
-// browser call the AI service directly without the X-API-Key header.
+// Server-only configuration. The signing secret never reaches the browser.
+// Note we use AI_SERVICE_URL (not NEXT_PUBLIC_AI_SERVICE_URL): the public var
+// is the browser's escape hatch in `lib/ai-service.ts`, and setting it would
+// let the browser call the AI service directly, bypassing this signed route.
 const AI_SERVICE_URL = (process.env.AI_SERVICE_URL ?? "http://localhost:8000").replace(
   /\/$/,
   ""
@@ -78,22 +79,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  const endpoint = `${AI_SERVICE_URL}/v1/realtime/join-call`;
+  const body = JSON.stringify({
+    call_id: `interview-${interviewId}`,
+    call_type: CALL_TYPE,
+    interview_id: interviewId,
+    resume_text: interview.resumeText ?? "",
+    job_description: interview.jobDescription,
+    questions: interview.plan?.questions ?? [],
+  });
+
   let upstream: Response;
   try {
-    upstream = await fetch(`${AI_SERVICE_URL}/v1/realtime/join-call`, {
+    const { pathname, search } = new URL(endpoint);
+    const { timestamp, signature } = await signServiceRequest({
+      secret: AI_SERVICE_API_KEY,
+      method: "POST",
+      pathWithQuery: `${pathname}${search}`,
+      payload: body,
+    });
+    upstream = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": AI_SERVICE_API_KEY,
+        "X-Service-Timestamp": timestamp,
+        "X-Service-Signature": signature,
       },
-      body: JSON.stringify({
-        call_id: `interview-${interviewId}`,
-        call_type: CALL_TYPE,
-        interview_id: interviewId,
-        resume_text: interview.resumeText ?? "",
-        job_description: interview.jobDescription,
-        questions: interview.plan?.questions ?? [],
-      }),
+      body,
       signal: AbortSignal.timeout(15_000),
     });
   } catch (error) {

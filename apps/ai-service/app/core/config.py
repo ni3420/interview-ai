@@ -1,4 +1,7 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEVELOPMENT_SERVICE_API_KEY = "dev-secret-key"
 
 
 class Settings(BaseSettings):
@@ -44,7 +47,10 @@ class Settings(BaseSettings):
     # Bound the JSON response so a runaway model cannot exhaust the worker.
     report_max_tokens: int = 4096
 
-    service_api_key: str = "dev-secret-key"
+    # Required. There is deliberately no default secret: the service refuses
+    # to start without one, so an unconfigured deployment cannot accept
+    # unauthenticated calls.
+    service_api_key: str = ""
 
     cors_origins: list[str] = ["http://localhost:3000"]
 
@@ -81,6 +87,23 @@ class Settings(BaseSettings):
     # Cap the grounded context injected into the agent's instructions.
     realtime_max_resume_chars: int = 6000
     realtime_max_questions: int = 25
+
+    @model_validator(mode="after")
+    def _validate_service_api_key(self) -> "Settings":
+        if not self.service_api_key.strip():
+            raise ValueError(
+                "SERVICE_API_KEY is required; refusing to start without "
+                "service authentication. Generate one with: openssl rand -hex 32"
+            )
+        if (
+            self.app_env not in {"development", "test"}
+            and self.service_api_key == DEVELOPMENT_SERVICE_API_KEY
+        ):
+            raise ValueError(
+                "SERVICE_API_KEY must not use the development default outside "
+                "development. Set a unique secret for this environment."
+            )
+        return self
 
 
 settings = Settings()

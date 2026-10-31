@@ -1,6 +1,6 @@
 import type { Job } from "bullmq";
 import { config } from "./config";
-import { postJson } from "./http";
+import { postJson, postSignedJson } from "./http";
 import { resumeJobSchema, type ResumeJob } from "./job";
 import { logEvent, logStage, queueWaitMs } from "./log";
 
@@ -121,7 +121,6 @@ export async function reportTerminalFailure(
  */
 export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
   const payload: ResumeJob = resumeJobSchema.parse(job.data);
-  const authHeaders = { "X-API-Key": config.aiServiceApiKey };
   const jobId = job.id;
 
   logEvent("info", "resume job started", {
@@ -134,14 +133,14 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
     await job.updateProgress(10);
 
     let startedAt = performance.now();
-    const processed = await postJson<ResumeProcessResponse>(
+    const processed = await postSignedJson<ResumeProcessResponse>(
       `${config.aiServiceUrl}/v1/resumes/process`,
       {
         resume_id: payload.resumeId,
         user_id: payload.userId,
         file_url: payload.fileUrl,
       },
-      authHeaders
+      config.aiServiceApiKey
     );
     logStage("worker.resume.process", startedAt, { jobId });
 
@@ -153,7 +152,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
     let resumeContext = processed.text;
     try {
       startedAt = performance.now();
-      const retrieved = await postJson<RetrieveResponse>(
+      const retrieved = await postSignedJson<RetrieveResponse>(
         `${config.aiServiceUrl}/v1/resumes/retrieve`,
         {
           resume_id: payload.resumeId,
@@ -161,7 +160,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
           query: payload.jobDescription,
           limit: 8,
         },
-        authHeaders
+        config.aiServiceApiKey
       );
       logStage("worker.resume.retrieve", startedAt, { jobId });
       if (retrieved.chunks.length > 0) {
@@ -176,13 +175,13 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
     await job.updateProgress(70);
 
     startedAt = performance.now();
-    const plan = await postJson<InterviewPlanResponse>(
+    const plan = await postSignedJson<InterviewPlanResponse>(
       `${config.aiServiceUrl}/v1/interviews/plan`,
       {
         resume_text: resumeContext,
         job_description: payload.jobDescription,
       },
-      authHeaders
+      config.aiServiceApiKey
     );
     logStage("worker.resume.plan", startedAt, {
       jobId,
