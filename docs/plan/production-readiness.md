@@ -66,8 +66,9 @@ passing item is the documentation drift script. Everything else fails:
 6. **The report is not fully evidence-based.** Coverage can be short (G-20), there is no
    quote per score (`convex/schema.ts:68-72`), and the overall score is whatever the model
    returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
-7. **Little is observed.** No `Sentry.init` (G-02), no latency fields (G-19), no CI
-   (G-05), no security headers (G-42). Per-user fixed-window budgets now cover
+7. **Little is observed.** No `Sentry.init` (G-02), no latency fields (G-19). CI now exists
+   (G-05) and the client ships baseline security headers from `next.config.ts` (G-42; a
+   full origin-scoped CSP is still deferred). Per-user fixed-window budgets now cover
    interview creation, resume/report enqueueing and agent dispatch (G-06).
 
 **What is strongest and should not be rewritten.** The queue boundaries, the report-job
@@ -137,8 +138,8 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Stuck-job recovery | working | 10-minute cron fails stale `reportJobs`/`resumes` (`convex/maintenance.ts`); operator requeue CLI in `worker/src/requeue.ts` |
 | Billing | **missing** | empty Stripe dirs, no plan fields (G-03) |
 | Error monitoring | **missing** | no `Sentry.init` (G-02) |
-| CI | **missing** | no `.github/` (G-05) |
-| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); security headers still missing (G-42) |
+| CI | working | `.github/workflows/ci.yml` runs client tests/typecheck/build + Convex typecheck, worker tests/typecheck/build, and pytest (G-05); lint is not gated (see G-47 row below) |
+| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); baseline security headers (HSTS, nosniff, frame-deny, referrer, permissions, minimal CSP) ship from `client/next.config.ts` (G-42); a full origin-scoped CSP is still deferred |
 
 ---
 
@@ -411,13 +412,15 @@ UI shows the quote and the formula. Effort: M. Depends on Phase 2 (durable answe
 ### Phase 4 — observability, CI, cost (Medium)
 
 Sentry init and `instrumentation.ts` (G-02); latency fields (G-19); CI for Q1–Q4, Q10, Q11,
-Q13 (G-05); fix the 6 red client tests (G-25); fix ruff config (G-47); model-call cost
+Q13 (G-05 — done 2026-10-31); fix the 6 red client tests (G-25 — done 2026-10-31); fix ruff
+config (G-47 — config loads 2026-10-31, ~790 findings remain as lint debt); model-call cost
 events. Acceptance: an induced error produces exactly one event; Q9 has data for every F9
 row; CI is green on a PR; a cost-per-interview number can be computed from logs. Effort: M.
 
 ### Phase 5 — hardening and design (Medium)
 
-Rate limits (G-06), security headers (G-42), worker config fail-closed (G-39), dead code
+Rate limits (G-06), security headers (G-42 — baseline done 2026-10-31, full CSP deferred),
+worker config fail-closed (G-39), dead code
 (G-28, G-03), pagination (G-45), structured AI-service logs (G-46), design-system migration
 (G-04, G-08, G-12) with ADR 0002. Effort: M–L. Depends on Phases 0–4.
 

@@ -1,0 +1,78 @@
+name: CI
+
+# Runs the gates that are green on the current tree. Lint is deliberately
+# absent: `ruff check` reports ~790 pre-existing findings (tracked as lint
+# debt), so gating on it would make every run red for unrelated reasons.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    name: Client (Next.js)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    env:
+      # Placeholders: the build needs the variables to be present, but CI never
+      # calls Clerk or Convex. Never put real keys in a workflow file.
+      NEXT_PUBLIC_CONVEX_URL: https://example.convex.cloud
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run test
+      - run: bunx tsc --noEmit
+      - name: Typecheck Convex functions
+        run: bunx tsc -p ../convex/tsconfig.json --noEmit --typeRoots ./node_modules/@types
+      - run: bun run build
+      - name: Verify security headers are compiled
+        run: grep -q "Strict-Transport-Security" .next/routes-manifest.json
+
+  worker:
+    name: Worker (BullMQ)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - run: bun run typecheck
+      - run: bun run build
+
+  ai-service:
+    name: AI service (FastAPI)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/ai-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv sync --frozen --extra dev
+      - run: uv run pytest -q
