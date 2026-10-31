@@ -210,6 +210,7 @@ export const requestReport = mutation({
         version: targetVersion,
         error: undefined,
         errorCode: undefined,
+        enqueuedAt: now,
         startedAt: undefined,
         completedAt: undefined,
         updatedAt: now,
@@ -226,6 +227,7 @@ export const requestReport = mutation({
       userId,
       status: "queued",
       version: targetVersion,
+      enqueuedAt: now,
       createdAt: now,
       updatedAt: now,
     });
@@ -269,11 +271,13 @@ export const markReportJobFailed = mutation({
       .unique();
     if (!job) return { success: false };
 
+    const now = Date.now();
     await ctx.db.patch(job._id, {
       status: "failed",
       error: args.error.slice(0, 500),
       errorCode: "enqueue_failed",
-      updatedAt: Date.now(),
+      completedAt: now,
+      updatedAt: now,
     });
     return { success: true };
   },

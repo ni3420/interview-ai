@@ -43,6 +43,7 @@ export const sweepStaleJobs = internalMutation({
           status: "failed",
           error: "Job timed out before completion",
           errorCode: "job_timeout",
+          completedAt: now,
           updatedAt: now,
         });
         failedReports += 1;

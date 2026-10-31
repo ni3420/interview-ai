@@ -68,7 +68,9 @@ passing item is the documentation drift script. Everything else fails:
    returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
 7. **Little is observed.** Error monitoring is opt-in through
    `src/instrumentation.ts` and `instrumentation-client.ts` (G-02) but has not been
-   exercised against a real DSN; latency fields are still missing (G-19). CI now exists
+   exercised against a real DSN. Report-job latency (enqueue → start → complete) is now
+   recorded in Convex and in worker terminal logs (G-19, done 2026-10-31); live room turn
+   latency and model token/cost events are still missing. CI now exists
    (G-05) and the client ships baseline security headers from `next.config.ts` (G-42; a
    full origin-scoped CSP is still deferred). Per-user fixed-window budgets now cover
    interview creation, resume/report enqueueing and agent dispatch (G-06).
@@ -228,7 +230,8 @@ Root causes worth naming because they explain several rows at once:
    Python dict, so reload, tab close, token expiry and agent failure have no authoritative
    record (G-13, G-26, G-34, G-37).
 3. **No measurement layer.** Without timing, token counts and error events, latency and
-   cost targets cannot be set honestly (G-02, G-19).
+   cost targets cannot be set honestly (G-02). Report timing now exists (G-19); live room
+   latency and token/cost counters are still missing.
 
 ---
 
@@ -242,14 +245,17 @@ Measured 2026-10-28 on this machine:
 | Static payload (raw, all chunks) | **2.4 MB** | `du -sh client/.next/static` |
 | Largest chunk (raw) | **629 KB** | `find .next/static -name '*.js' -printf ...` |
 | gzip / per-route First Load JS | not emitted by this Next 16.4 build | — |
-| Runtime latency (join, first turn, turn, report) | **UNVERIFIED** — no instrumentation | Q9 = 0 hits |
+| Runtime latency (join, first turn, turn) | **UNVERIFIED** — no hook in the live room | Q9 = partial |
+| Report latency (enqueue → start → complete) | **instrumented, no production sample yet** | Convex `reportJobs` + worker terminal logs |
 
 Budgets to hold (from F9): dispatch ≤ 1.5 s, audible ≤ 5 s, turn ≤ 2.5 s, caption→row ≤ 2 s,
 report enqueue ≤ 0.5 s, queued→processing ≤ 10 s, text model call ≤ 120 s.
 
-Measurement plan (Phase 4): one timing record per interview (`joinedAt`, `agentAudibleAt`,
-`turnLatency[]`, `reportEnqueuedAt`, `reportStartedAt`) plus a derived p50/p95 once ≥ 100
-sessions exist. Until then, any p95 claim is unverifiable. Bundle target: set after gzip
+Report latencies are now queryable: `reportJobs.enqueuedAt`, `startedAt`, `completedAt`
+(set on success and on terminal failure) give queued→processing and processing→complete;
+worker `completed`/`failed` lines carry `queueWaitMs`, `processingMs` and `endToEndMs`.
+Live room turn latency still has no producer. Derived p50/p95 requires ≥ 100 sessions;
+until then, any p95 claim is unverifiable. Bundle target: set after gzip
 measurement; do not invent one now.
 
 ---
@@ -414,11 +420,13 @@ UI shows the quote and the formula. Effort: M. Depends on Phase 2 (durable answe
 ### Phase 4 — observability, CI, cost (Medium)
 
 Sentry init through `instrumentation.ts` and `instrumentation-client.ts` (G-02 — done
-2026-10-31, opt-in); latency fields (G-19); CI for Q1–Q4, Q10, Q11,
-Q13 (G-05 — done 2026-10-31); fix the 6 red client tests (G-25 — done 2026-10-31); fix ruff
-config (G-47 — config loads 2026-10-31, ~790 findings remain as lint debt); model-call cost
-events. Acceptance: an induced error produces exactly one event; Q9 has data for every F9
-row; CI is green on a PR; a cost-per-interview number can be computed from logs. Effort: M.
+2026-10-31, opt-in); report-job latency fields (G-19 — done 2026-10-31); CI for Q1–Q4,
+Q10, Q11, Q13 (G-05 — done 2026-10-31); fix the 6 red client tests (G-25 — done
+2026-10-31); fix ruff config (G-47 — config loads 2026-10-31, ~790 findings remain as lint
+debt); model-call cost events. Acceptance: an induced error produces exactly one event; Q9
+has data for every F9 row; CI is green on a PR; a cost-per-interview number can be computed
+from logs. Remaining for acceptance: live room turn latency (Q9's last row) and token/cost
+events. Effort: M.
 
 ### Phase 5 — hardening and design (Medium)
 

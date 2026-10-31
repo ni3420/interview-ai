@@ -147,7 +147,7 @@ passing gates must stay green; failing gates must not get worse. Only the Releas
 | Q6 | **not run** — no UI change in the audit |
 | Q7 | **FAIL** — 13 toast calls; copy does not match D17 |
 | Q8 | **FAIL** — `client/test/flows` does not exist |
-| Q9 | **partial** (2026-10-29 re-run) — producers exist for 6 of 7 F9 rows; live turn latency has no hook. See §Performance baseline |
+| Q9 | **partial** (2026-10-31 re-run) — report enqueue→start→complete timing now persisted and logged (G-19); live turn latency still has no hook. See §Performance baseline |
 | Q10 | **pass** — typecheck 0, 11 tests passed / 0 failed |
 | Q11 | **pass** — `bun run build` exit 0, 16 routes |
 | Q12 | **FAIL** — 3 `dev-secret-key` hits (`compose.yaml:53,84`, `config.py:36`) |
@@ -240,7 +240,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-16 | `realtime/instructions.py:38-69` |
 | G-17 | `convex/answers.ts:26-31`; `transcript-recorder.ts:84` |
 | G-18 | `setup/page.tsx:85-94`; `stream-provider.tsx:137-138` |
-| G-19 | grep timing fields: 0 hits |
+| G-19 | **fixed 2026-10-31** — `reportJobs.enqueuedAt`/`startedAt`/`completedAt`; worker `jobTiming` on terminal logs. Live turn latency still open (Q9) |
 | G-20 | `worker/src/report-processor.ts:59-91,167`; `convex/schema.ts:68-72` |
 | G-21 | `app/layout.tsx:29`; `UserSyncProvider.tsx:40-44` |
 | G-22 | `config.py:36`; `deps.py:11`; `compose.yaml:53,84`; `lib/ai-service.ts:15` |

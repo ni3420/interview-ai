@@ -326,12 +326,16 @@ export const failReportJob = internalMutation({
       return { success: false, stale: true };
     }
 
+    const now = Date.now();
     await ctx.db.patch(job._id, {
       status: "failed",
       // Never persist a raw provider message; the UI maps the stable code.
       error: (args.error ?? "Report generation failed").slice(0, 500),
       errorCode: args.errorCode ?? "report_generation_failed",
-      updatedAt: Date.now(),
+      // The worker only reports terminal failures, so this is the end time
+      // used for start→complete latency on failed jobs.
+      completedAt: now,
+      updatedAt: now,
     });
 
     return { success: true };

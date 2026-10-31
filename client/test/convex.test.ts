@@ -991,6 +991,7 @@ describe("Convex - Report jobs", () => {
           userId: mockAuthUserId,
           status: "queued",
           version: 1,
+          enqueuedAt: expect.any(Number),
         })
       );
     });
@@ -1035,7 +1036,11 @@ describe("Convex - Report jobs", () => {
       });
       expect(mockCtx.db.patch).toHaveBeenCalledWith(
         "report-job-1",
-        expect.objectContaining({ status: "queued", version: 2 })
+        expect.objectContaining({
+          status: "queued",
+          version: 2,
+          enqueuedAt: expect.any(Number),
+        })
       );
     });
 
@@ -1419,6 +1424,7 @@ describe("Convex - Report jobs", () => {
         expect.objectContaining({
           status: "failed",
           errorCode: "ai_service_unavailable",
+          completedAt: expect.any(Number),
         })
       );
     });

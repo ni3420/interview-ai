@@ -5,6 +5,7 @@ import {
   processReportJob,
   reportEvaluationTerminalFailure,
 } from "./report-processor";
+import { jobTiming } from "./log";
 import {
   recordActive,
   recordCompleted,
@@ -54,7 +55,7 @@ worker.on("active", () => recordActive("resume"));
 
 worker.on("completed", (job, result) => {
   recordCompleted("resume");
-  log("job completed", { jobId: job.id, result });
+  log("job completed", { jobId: job.id, result, ...jobTiming(job) });
 });
 
 worker.on("stalled", (jobId) => {
@@ -80,6 +81,7 @@ worker.on("failed", (job, error) => {
       attemptsMade: job?.attemptsMade,
       attempts: job?.opts.attempts,
       error: error.message,
+      ...(job ? jobTiming(job) : {}),
     })
   );
 
@@ -105,7 +107,7 @@ reportWorker.on("active", () => recordActive("report"));
 
 reportWorker.on("completed", (job, result) => {
   recordCompleted("report");
-  log("report job completed", { jobId: job.id, result });
+  log("report job completed", { jobId: job.id, result, ...jobTiming(job) });
 });
 
 reportWorker.on("stalled", (jobId) => {
@@ -131,6 +133,7 @@ reportWorker.on("failed", (job, error) => {
       attemptsMade: job?.attemptsMade,
       attempts: job?.opts.attempts,
       error: error.message,
+      ...(job ? jobTiming(job) : {}),
     })
   );
 

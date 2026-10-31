@@ -228,7 +228,11 @@ export default defineSchema({
     promptVersion: v.optional(v.string()),
     rubricVersion: v.optional(v.string()),
     reportId: v.optional(v.id("reports")),
+    /** Queue hand-off for the current version; reset on every re-queue. */
+    enqueuedAt: v.optional(v.number()),
+    /** First pickup by a worker for the current version. */
     startedAt: v.optional(v.number()),
+    /** Terminal time, set on both success and terminal failure. */
     completedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
