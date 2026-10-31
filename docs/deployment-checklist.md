@@ -180,11 +180,20 @@ a pass is the observed result, not the intention.
 ### Security headers
 - [ ] `curl -I https://<client-host>/` returns `Strict-Transport-Security`,
       `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`,
-      `Permissions-Policy` with `camera=(self)`/`microphone=(self)`, and a CSP containing
-      `frame-ancestors 'none'` ([next.config.ts](../client/next.config.ts)).
+      `Permissions-Policy` with `camera=(self)`/`microphone=(self)`, and the
+      origin-scoped CSP from [next.config.ts](../client/next.config.ts) containing
+      `frame-ancestors 'none'`, the Clerk frontend-API host, the Convex deployment
+      (`https` + `wss`), `https://video.stream-io-api.com`, and `upgrade-insecure-requests`
+      ([csp.ts](../client/src/lib/csp.ts)).
+- [ ] The CSP is built at build time from `NEXT_PUBLIC_CONVEX_URL`,
+      `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and (optionally) `NEXT_PUBLIC_SENTRY_DSN`;
+      changing any of them requires a rebuild, not just a restart.
 - [ ] The same headers are present on a `307` redirect and on a `401` API response.
 - [ ] After signing in, camera and microphone prompts still work in the lobby — the
       Permissions-Policy must not block the core interview flow.
+- [ ] Signed-out `/sign-in` and `/sign-up` render with no CSP violations in the browser
+      console; a live interview room does the same (Stream hosts are allowlisted but a
+      live call is not part of automated verification).
 
 ### Error monitoring
 - [ ] With `NEXT_PUBLIC_SENTRY_DSN` unset, the app starts and the browser makes no
@@ -273,15 +282,27 @@ touched; do not "fix" the baselines below inside a deploy run.
 cd client && bun run test                 # vitest
 cd client && bunx tsc --noEmit
 cd client && bun run build
+cd client && bunx playwright install chromium && bun run test:e2e  # Playwright; uses port 3927
 cd client && bunx tsc -p ../convex/tsconfig.json --noEmit --typeRoots ./node_modules/@types
 cd worker && bun test && bun run typecheck && bun run build
 cd apps/ai-service && uv run pytest
 ```
 
-Last verified 2026-10-31: client vitest **250 passed / 0 failed** (23 files), worker **24
-passed**, AI service pytest **133 passed / 1 skipped** (integration test skipped without
-local Qdrant/Ollama), Convex typecheck **0** with `--typeRoots`, client typecheck and build
-**0**, worker typecheck/build **0**. `ruff` now loads: the invalid `QTY`/`TT`/`IF` selectors
+`test:e2e` starts its own dev server with `E2E_HARNESS=1`, `NEXT_PUBLIC_E2E_HARNESS=1`
+and `E2E_DIST_DIR=.next-e2e` (override with `E2E_PORT`). The harness route returns 404 in
+production builds and outside `/e2e/` the auth redirect is unchanged. `test:e2e:harness`
+runs only the credential-free spec and is the command the CI `e2e-harness` job uses;
+`app-shell.spec.ts` needs a real Clerk dev instance and is not part of CI.
+
+Last verified 2026-11-01: client vitest **272 passed / 0 failed** (26 files), client
+typecheck **0**, lint **0 errors / 9 warnings**, build **0** (16 routes), Playwright **3
+passed** with real dev credentials and **1 passed** for the harness spec alone under CI
+placeholder values. CSP re-check on a `next start` build: `/` **200**, `/dashboard`
+**307**, `/e2e/room-harness` **404**; a fresh signed-out browser rendered `/sign-in` and
+`/sign-up` with **0** CSP violations and **0** console errors. Verified on 2026-10-31:
+worker **24 passed**, AI service pytest **133 passed / 1 skipped** (integration
+test skipped without local Qdrant/Ollama), Convex typecheck **0** with `--typeRoots`,
+worker typecheck/build **0**. `ruff` now loads: the invalid `QTY`/`TT`/`IF` selectors
 were replaced and the settings moved under `[tool.ruff.lint]`; it still reports **790
 pre-existing findings** (top: `S101` asserts in tests, `D1xx` docstring coverage,
 `PLR2004`, `TRY003`) that are lint debt, not test failures. Raw
@@ -294,7 +315,7 @@ These are not checklist steps; they are honest gates that remain open in this tr
 
 | Item | Evidence | Blocks public launch? |
 |---|---|---|
-| G-42 security headers | **baseline implemented 2026-10-31**: HSTS, nosniff, frame-deny, referrer, permissions policy, minimal CSP in `client/next.config.ts`; a full origin-scoped CSP (Clerk/Convex/Stream/Sentry hosts) is still deferred | no for launch review; yes for the CSP follow-up |
+| G-42 security headers | **implemented 2026-11-01**: HSTS, nosniff, frame-deny, referrer, permissions policy, and an origin-scoped CSP built from env (`client/src/lib/csp.ts`). Residual: `script-src` keeps `'unsafe-inline'` because the App Router emits inline bootstrap scripts and nonces would force every page dynamic; Stream hosts are allowlisted but only exercised by a live call | no; follow-up is nonce-based scripts and a live-room check |
 | G-05 CI | **added 2026-10-31**: `.github/workflows/ci.yml` runs the green gates (client tests/typecheck/build + Convex typecheck, worker tests/build, pytest); lint is not gated because of the ~790 findings | no; branch protection still needs manual setup |
 | G-02 error monitoring | **implemented 2026-10-31**: server and browser instrumentation init only when a DSN is configured; replays, tracing and PII are off. Delivery to a real project is UNVERIFIED (no DSN available here) | no for code; yes until a DSN is configured and one event is observed |
 | G-25 red tests | **resolved 2026-10-31**: assertions updated to the redesigned lobby and job-description copy; 250/250 client tests pass | no |

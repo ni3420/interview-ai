@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/layout/Providers";
-import UserSyncProvider from "@/components/layout/UserSyncProvider";
 import "@stream-io/video-react-sdk/dist/css/styles.css";
 
 
@@ -26,11 +25,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col">
         <Providers>
-<UserSyncProvider>
           {children}
-
-</UserSyncProvider>
-          </Providers>
+        </Providers>
       </body>
     </html>
   );

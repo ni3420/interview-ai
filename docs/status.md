@@ -110,9 +110,17 @@ Verified 2026-10-28:
   (`PricingSection.tsx:89`) — that is UI, not billing.
 - `Sentry.init`, `withSentryConfig`, `instrumentation.ts` (grep: 0 hits).
   `client/src/lib/glitchtip.ts` wraps five call sites but drops events.
-- `.github/` (no CI), rate limiting (grep `rate.?limit` in `.ts/.tsx/.js/.py`:
-  0 hits; the only match is prose in `apps/ai-service/AGENTS.md`), security headers
-  (`next.config.ts` has no `headers()`), pagination (no `paginate(` in `convex/`).
+- Rate limiting (grep `rate.?limit` in `.ts/.tsx/.js/.py`: 0 hits; the only match is
+  prose in `apps/ai-service/AGENTS.md`) and pagination (no `paginate(` in `convex/`).
+- Security headers exist (2026-11-01): `next.config.ts` ships HSTS, nosniff, frame-deny,
+  referrer, permissions policy and an origin-scoped CSP built in `src/lib/csp.ts` from
+  `NEXT_PUBLIC_CONVEX_URL`, the Clerk publishable key, Stream hosts and an optional
+  Sentry DSN. Values are baked into the build, so env changes need a rebuild.
+  `script-src` still allows `'unsafe-inline'` (App Router inline bootstrap scripts).
+- CI exists (2026-11-01): `.github/workflows/ci.yml` runs `client`, `e2e-harness`,
+  `worker` and `ai-service` on push/PR with placeholder Clerk/Convex values; it deploys
+  nothing and never calls a provider. Not verified in GitHub Actions — the workflow has
+  not been pushed.
 - `convex/tests/` is empty. Convex handler tests live in `client/test/convex.test.ts`
   and run inside Q3.
 - No `apps/web` application: the directory contains only a stale `apps/web/AGENTS.md`
@@ -147,7 +155,7 @@ passing gates must stay green; failing gates must not get worse. Only the Releas
 | Q5 | **FAIL** — 44 hardcoded palette matches on the landing surface |
 | Q6 | **not run** — no UI change in the audit |
 | Q7 | **FAIL** — 13 toast calls; copy does not match D17 |
-| Q8 | **FAIL** — `client/test/flows` does not exist |
+| Q8 | **partial** (2026-11-01) — Playwright suite in `client/test/e2e` (3 flows: room-timing harness, landing page, signed-out redirect); a scripted fake call drives the real transcript panel. Only `room-timing.spec.ts` is credential-free and runs in the CI `e2e-harness` job via `test:e2e:harness`; `app-shell.spec.ts` needs a real Clerk dev instance and stays local. Mic/camera permission, reconnect and full-journey flows still absent |
 | Q9 | **partial** (2026-10-31 re-run) — join stages, report enqueue→start→complete timing and model token/cost events are instrumented (G-19); the room now logs `turn.response` (candidate speech end → interviewer speech start from caption timestamps), but no live call has produced a sample. Gemini Live audio-seconds usage and caption→row still have no producer. See §Performance baseline |
 | Q10 | **pass** — typecheck 0, 11 tests passed / 0 failed |
 | Q11 | **pass** — `bun run build` exit 0, 16 routes |
@@ -182,6 +190,21 @@ Q16 schema/index check: not run — `bunx convex codegen` refuses without a
 so the `by_email` index is **UNVERIFIED on the deployment**. A local query against a
 missing index errors at runtime, so the next `convex dev` push must be confirmed before the
 first sign-in on a fresh account.
+
+Re-run 2026-11-01 after the Q8 harness and CI job: Q1 `bunx tsc --noEmit` exit **0**;
+Q2 `bun run lint` **0 errors, 9 warnings** — the same nine warnings as the baseline, after
+adding `.next-e2e/**` to the ESLint ignore list and replacing a non-inline `useMemo`
+callback in the harness (both introduced with the E2E output dir); Q3 `bun run test` **272
+passed, 0 failed / 272 tests, 26 files** (the six G-25 tests in `InterviewLobby.test.tsx`
+and `JobDescriptionInput.test.tsx` now pass); Q8 full Playwright suite **3 passed** with
+real dev credentials, and the harness spec alone **1 passed** under the CI placeholder env
+because `/e2e/` bypasses Clerk/Convex in `proxy.ts` and `Providers.tsx`; Q11 `bun run
+build` exit **0**, 16 routes, `/e2e/room-harness` dynamic. Production probe on the built
+server: `/e2e/room-harness` **404**, `/dashboard` **307**, `/` **200**. CSP re-check on the
+same build: header carries the Clerk frontend-API host, Convex `http`+`ws`, Stream hosts
+and `upgrade-insecure-requests`; a fresh signed-out browser loaded `/sign-in` and
+`/sign-up` with **0** CSP violations and **0** console errors. Not run: Q4–Q7, Q9–Q10,
+Q12–Q13.
 
 Load target for the release gate: **UNVERIFIED** — `N` concurrent interviews is not yet
 chosen or measured.
@@ -228,7 +251,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-02 | grep `Sentry.init\|withSentryConfig\|instrumentation`: 0 hits; `lib/glitchtip.ts` |
 | G-03 | empty dirs under `client/src/app/api/stripe/` and `client/src/app/admin/billing` |
 | G-04 | `features/components/common/*` vs `components/ui/*`; `/reports` imports common |
-| G-05 | `.github/` absent |
+| G-05 | `.github/workflows/ci.yml` (4 jobs, no deploy) |
 | G-06 | grep `rate.?limit` in source files: 0 hits |
 | G-07 | `convex/schema.ts:25` (`plan: v.optional(v.any())`) |
 | G-08 | `app/page.tsx`, `HeroSection.tsx`, setup, lobby, `stream-provider.tsx` |
@@ -264,7 +287,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-39 | `worker/src/processor.ts:181-201` |
 | G-40 | `report-processor.ts:218-223`; `convex/worker.ts:219-223`; `report/page.tsx:113-116,231` |
 | G-41 | `convex/interviews.ts:5-27` |
-| G-42 | `client/next.config.ts` (no `headers()`) |
+| G-42 | `client/src/lib/csp.ts`; `client/next.config.ts`; `client/test/csp.test.ts` |
 | G-43 | `convex/resume.ts:125-136`; no `deleteInterview` |
 | G-44 | `convex/reports.ts:98-121,182-202` |
 | G-45 | `convex/interviews.ts:29-37`; `getAnswers`, `getUserReports` |

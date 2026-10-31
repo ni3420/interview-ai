@@ -1,12 +1,20 @@
 import type { NextConfig } from "next";
+import { buildContentSecurityPolicy } from "./src/lib/csp";
 
 // Baseline security headers for every response (G-42). The interview needs
 // camera/microphone/display-capture for this origin, so those features stay
 // enabled; everything else in the policy list is denied.
 //
-// The CSP is deliberately narrow: it blocks embedding and plugin content but
-// does not restrict script/style/connect sources yet. A full origin-scoped CSP
-// needs its own pass because Clerk, Convex, Stream and Sentry each add hosts.
+// The CSP is origin-scoped: Clerk, Convex, Stream and an optional Sentry/
+// GlitchTip DSN contribute their exact hosts, derived from the env at build
+// time. There is no `https:`/`wss:` wildcard for script or connect sources.
+const contentSecurityPolicy = buildContentSecurityPolicy({
+  nodeEnv: process.env.NODE_ENV,
+  convexUrl: process.env.NEXT_PUBLIC_CONVEX_URL,
+  clerkPublishableKey: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  sentryDsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+});
+
 const securityHeaders = [
   {
     key: "Strict-Transport-Security",
@@ -22,11 +30,14 @@ const securityHeaders = [
   },
   {
     key: "Content-Security-Policy",
-    value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'",
+    value: contentSecurityPolicy,
   },
 ];
 
 const nextConfig: NextConfig = {
+  // Playwright runs beside a developer's dev server; a separate output dir
+  // keeps the two Next dev instances from sharing a lock file.
+  distDir: process.env.E2E_DIST_DIR ?? ".next",
   // bullmq/ioredis are Node-only and rely on dynamic requires; keep them
   // external so the server route can load them at runtime.
   serverExternalPackages: ["bullmq", "ioredis"],

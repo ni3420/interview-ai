@@ -44,6 +44,28 @@ jobs:
       - name: Verify security headers are compiled
         run: grep -q "Strict-Transport-Security" .next/routes-manifest.json
 
+  e2e-harness:
+    name: Client E2E (harness)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: client
+    env:
+      # Placeholders: the harness spec renders without Clerk/Convex, and /e2e is
+      # excluded from the Clerk middleware. Never put real keys in a workflow.
+      NEXT_PUBLIC_CONVEX_URL: https://example.convex.cloud
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+      CLERK_SECRET_KEY: sk_test_ci_placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e:harness
+
   worker:
     name: Worker (BullMQ)
     runs-on: ubuntu-latest

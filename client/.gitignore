@@ -13,8 +13,14 @@
 # testing
 /coverage
 
+# playwright
+/test-results/
+/playwright-report/
+/blob-report/
+
 # next.js
 /.next/
+/.next-e2e/
 /out/
 
 # production

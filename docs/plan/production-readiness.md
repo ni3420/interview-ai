@@ -73,9 +73,11 @@ passing item is the documentation drift script. Everything else fails:
    model calls log token usage and an optional cost estimate (done 2026-10-31), and the
    room logs `turn.response` from caption timestamps (done 2026-10-31, no live sample
    yet); Gemini Live usage is still missing. CI now exists
-   (G-05) and the client ships baseline security headers from `next.config.ts` (G-42; a
-   full origin-scoped CSP is still deferred). Per-user fixed-window budgets now cover
-   interview creation, resume/report enqueueing and agent dispatch (G-06).
+   (G-05) and the client ships origin-scoped security headers from `next.config.ts`
+   (G-42, done 2026-11-01: Clerk/Convex/Stream/Sentry hosts are built from env; only
+   `script-src 'unsafe-inline'` remains as the known weakness). Per-user fixed-window
+   budgets now cover interview creation, resume/report enqueueing and agent dispatch
+   (G-06).
 
 **What is strongest and should not be rewritten.** The queue boundaries, the report-job
 state table, the worker HTTP contract, the device-preview lobby (permission handling,
@@ -145,7 +147,7 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Billing | **missing** | empty Stripe dirs, no plan fields (G-03) |
 | Error monitoring | working (opt-in) | `src/instrumentation.ts` + `instrumentation-client.ts` init Sentry/GlitchTip only when `NEXT_PUBLIC_SENTRY_DSN` is set; replays/tracing/PII off (G-02). Delivery to a real project is UNVERIFIED |
 | CI | working | `.github/workflows/ci.yml` runs client tests/typecheck/build + Convex typecheck, worker tests/typecheck/build, and pytest (G-05); lint is not gated (see G-47 row below) |
-| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); baseline security headers (HSTS, nosniff, frame-deny, referrer, permissions, minimal CSP) ship from `client/next.config.ts` (G-42); a full origin-scoped CSP is still deferred |
+| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); origin-scoped security headers (HSTS, nosniff, frame-deny, referrer, permissions, CSP with Clerk/Convex/Stream/Sentry hosts) ship from `client/next.config.ts` + `client/src/lib/csp.ts` (G-42, 2026-11-01) |
 
 ---
 
@@ -355,7 +357,7 @@ Current inventory (measured 2026-10-28):
 | Worker | — | 11 | passing |
 | AI service | 9 (8 unit + 1 integration) | 72 | 71 pass, 1 skip |
 | Convex | 1 file inside client | included above | no `convex/tests` |
-| End-to-end / flows | 0 | 0 | **missing** (Q8) |
+| End-to-end / flows | 2 specs (`client/test/e2e`) | 3 | **partial** (Q8, 2026-11-01): room-timing harness, landing page, signed-out redirect |
 | Browser (mic/camera) | 0 | 0 | **missing** |
 | Load / concurrency | 0 | 0 | **missing** |
 
@@ -375,10 +377,12 @@ Priority tests to add, mapped to rules:
 9. **Rate limits** (S13): per-user bucket on AI proxy and enqueue routes.
 10. **Accessibility** (T-aria): one `h1`, focus order, labels, 390px viewport.
 
-Tooling: Vitest for unit/component (already used), Playwright for browser and
-mic-permission flows (not installed — a dependency decision, D-08), a fake Gemini Live
+Tooling: Vitest for unit/component (already used), Playwright for browser flows (installed
+2026-10-31; D-08), a fake Gemini Live
 agent for integration, and k6 or autocannon for load. Deterministic tests use mocked
 providers; live-provider tests are opt-in via the `integration` marker that already exists.
+CI (`.github/workflows/ci.yml`) runs the credential-free `room-timing` harness spec in the
+`e2e-harness` job; specs that need a real Clerk dev instance stay local.
 
 Release criteria: all gates in `docs/status.md` at or above baseline, no failing test in a
 passing suite, and the release gate in AGENTS.md fully checked.
@@ -448,8 +452,8 @@ usage and local embeddings, so the number is a lower bound for the full intervie
 
 ### Phase 5 — hardening and design (Medium)
 
-Rate limits (G-06), security headers (G-42 — baseline done 2026-10-31, full CSP deferred),
-worker config fail-closed (G-39), dead code
+Rate limits (G-06), security headers (G-42 — origin-scoped CSP done 2026-11-01; nonce-based
+`script-src` remains open), worker config fail-closed (G-39), dead code
 (G-28, G-03), pagination (G-45), structured AI-service logs (G-46), design-system migration
 (G-04, G-08, G-12) with ADR 0002. Effort: M–L. Depends on Phases 0–4.
 
@@ -499,7 +503,7 @@ Proposed target:
 | D-05 | Provider data handling | Ollama-only for prod / Gemini allowed | confirm DPA and data region before Gemini in prod | you + legal |
 | D-06 | Overall score formula | mean of per-answer scores / weighted by question importance | simple mean, rounded, stated in UI | you |
 | D-07 | Staging topology | separate Convex deployment / shared dev | separate deployment | you |
-| D-08 | Browser-test tool | Playwright / none | Playwright for mic-permission and reconnect flows | you (new dependency) |
+| D-08 | Browser-test tool | Playwright / none | **decided 2026-10-31**: Playwright installed; suite covers harness, landing and route protection, not yet mic-permission/reconnect. CI runs the harness spec only | settled |
 | D-09 | Design token promotion | promote to `:root` / keep scoped | ADR 0002, promote with G-08 | you |
 
 ---
