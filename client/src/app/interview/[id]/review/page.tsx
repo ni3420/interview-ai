@@ -16,7 +16,13 @@ import {
 import { Card, CardContent } from "@/features/components/common/Card";
 import { Badge, type BadgeStatus } from "@/features/components/common/Badge";
 import { Button } from "@/features/components/common/Button";
-import { buildQuestionBreakdown } from "@/lib/interview-report";
+import {
+  buildQuestionBreakdown,
+  formatScore,
+  reportScoreScale,
+  RUBRIC_SCORE_SCALE,
+  scoreBand,
+} from "@/lib/interview-report";
 
 interface Interview {
   _id: string;
@@ -35,11 +41,16 @@ interface Answer {
 }
 
 interface Report {
-  overallScore: number;
+  overallScore: number | null;
+  scoreScale?: number;
+  strengths?: string[];
+  weaknesses?: string[];
   questionScores: Array<{
     questionIndex: number;
-    score: number;
+    score: number | null;
     feedback: string;
+    status?: "answered" | "partial" | "unanswered" | "not_evaluable";
+    notEvaluableReason?: string;
   }>;
 }
 
@@ -107,6 +118,13 @@ export default function InterviewReviewPage() {
   }
 
   const answeredCount = breakdown.length;
+  const reportScale = reportScoreScale(report);
+  const reportQuestionByIndex = new Map(
+    (report?.questionScores ?? []).map((question) => [
+      question.questionIndex,
+      question,
+    ])
+  );
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:py-8">
@@ -136,11 +154,66 @@ export default function InterviewReviewPage() {
         {report && (
           <Button asChild leftIcon={<BarChart3 className="h-4 w-4" />} className="rounded-xl">
             <Link href={`/interview/${interviewId}/report`}>
-              View Full Report ({report.overallScore}/100)
+              View Full Report ({formatScore(report.overallScore, reportScale)})
             </Link>
           </Button>
         )}
       </div>
+
+      {/* Performance Summary */}
+      {report && (
+        <Card className="border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/80">
+          <CardContent className="space-y-5 p-4 sm:p-5">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Performance Summary
+              </p>
+              <p className="mt-1 text-3xl font-extrabold tabular-nums text-slate-900 dark:text-slate-100">
+                {formatScore(report.overallScore, reportScale)}
+              </p>
+              <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300 sm:text-sm">
+                {typeof report.overallScore === "number"
+                  ? `${scoreBand(report.overallScore, reportScale)} overall performance`
+                  : "No question had enough evidence to score."}
+              </p>
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <section>
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Key Strengths
+                </h2>
+                {(report.strengths ?? []).length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300 sm:text-sm">
+                    {(report.strengths ?? []).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    No strengths were recorded for this report.
+                  </p>
+                )}
+              </section>
+              <section>
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Areas to Improve
+                </h2>
+                {(report.weaknesses ?? []).length > 0 ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300 sm:text-sm">
+                    {(report.weaknesses ?? []).map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    No weaknesses were recorded for this report.
+                  </p>
+                )}
+              </section>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Target Role Card */}
       <Card className="border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/80">
@@ -168,9 +241,19 @@ export default function InterviewReviewPage() {
         <div className="space-y-4">
           {breakdown.map((item, index) => {
             const score =
-              item.score !== undefined
+              typeof item.score === "number"
                 ? { score: item.score, feedback: item.feedback ?? "" }
                 : undefined;
+            const reportQuestion = reportQuestionByIndex.get(item.questionIndex);
+            const answerVisible =
+              !reportQuestion?.status ||
+              reportQuestion.status === "answered" ||
+              reportQuestion.status === "partial";
+            const percent = score
+              ? reportScale === RUBRIC_SCORE_SCALE
+                ? score.score * 10
+                : score.score
+              : 0;
 
             return (
               <Card
@@ -191,14 +274,14 @@ export default function InterviewReviewPage() {
                     {score && (
                       <Badge
                         status={
-                          score.score >= 80
+                          percent >= 80
                             ? "success"
-                            : score.score >= 60
+                            : percent >= 60
                               ? "warning"
                               : "neutral"
                         }
                       >
-                        {score.score}/100
+                        {formatScore(score.score, reportScale)}
                       </Badge>
                     )}
                   </div>
@@ -209,13 +292,14 @@ export default function InterviewReviewPage() {
                       <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
                       Candidate Answer
                     </p>
-                    {item.answer.trim().length > 0 ? (
+                    {answerVisible && item.answer.trim().length > 0 ? (
                       <p className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200">
                         {item.answer}
                       </p>
                     ) : (
                       <p className="text-xs italic text-slate-400">
-                        No verbal or written answer recorded for this question.
+                        {reportQuestion?.notEvaluableReason ??
+                          "No verifiable candidate answer was recorded for this question."}
                       </p>
                     )}
                   </div>

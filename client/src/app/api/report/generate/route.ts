@@ -16,6 +16,7 @@ interface RequestReportState {
     | "no_answers"
     | "not_found";
   shouldEnqueue: boolean;
+  version?: number;
 }
 
 /**
@@ -45,8 +46,12 @@ export async function POST(request: NextRequest) {
   }
 
   let interviewId: unknown;
+  let regenerate: unknown;
   try {
-    ({ interviewId } = (await request.json()) as { interviewId?: unknown });
+    ({ interviewId, regenerate } = (await request.json()) as {
+      interviewId?: unknown;
+      regenerate?: unknown;
+    });
   } catch {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
@@ -56,6 +61,9 @@ export async function POST(request: NextRequest) {
       { error: "interviewId is required" },
       { status: 400 }
     );
+  }
+  if (regenerate !== undefined && typeof regenerate !== "boolean") {
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
   const convexToken = await getToken({ template: "convex" });
@@ -70,6 +78,7 @@ export async function POST(request: NextRequest) {
   try {
     state = (await convex.mutation(api.reports.requestReport, {
       interviewId,
+      ...(regenerate === true ? { regenerate: true } : {}),
     })) as RequestReportState;
   } catch (error) {
     console.error("Failed to request report generation", error);
@@ -86,17 +95,22 @@ export async function POST(request: NextRequest) {
     );
   }
   if (state.status === "completed") {
-    return NextResponse.json({ status: "completed" });
+    return NextResponse.json({ status: "completed", version: state.version });
   }
   if (!state.shouldEnqueue) {
-    return NextResponse.json({ status: state.status }, { status: 202 });
+    return NextResponse.json(
+      { status: state.status, version: state.version },
+      { status: 202 }
+    );
   }
 
   try {
     const queue = getReportQueue();
-    // A stable, colon-free id makes repeated requests idempotent while a job is
-    // pending or active. (BullMQ rejects custom ids containing ":".)
-    const jobId = `report-${interviewId}`;
+    // One deterministic id per interview version: repeated requests for the
+    // same version deduplicate, while a regeneration gets a new id and never
+    // replaces the running/old job. (BullMQ rejects ids containing ":".)
+    const version = state.version ?? 1;
+    const jobId = `report-${interviewId}-v${version}`;
 
     // BullMQ ignores `add` when a finished job with this id is still retained.
     // Clear a terminal job so an explicit retry actually runs.
@@ -108,9 +122,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    await queue.add("evaluate-interview", buildReportJob(interviewId), {
-      jobId,
-    });
+    await queue.add(
+      "evaluate-interview",
+      buildReportJob(interviewId, version),
+      { jobId }
+    );
   } catch (error) {
     console.error("Failed to enqueue report generation", error);
     await convex

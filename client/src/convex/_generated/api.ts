@@ -25,10 +25,11 @@ export const api = {
   answers: {
     saveAnswer: asMutationRef("answers:saveAnswer"),
     getAnswers: asQueryRef("answers:getAnswers"),
+    saveTranscriptSegment: asMutationRef("answers:saveTranscriptSegment"),
+    getTranscriptSegments: asQueryRef("answers:getTranscriptSegments"),
     incrementQuestionIndex: asMutationRef("answers:incrementQuestionIndex"),
   },
   reports: {
-    saveReport: asMutationRef("reports:saveReport"),
     requestReport: asMutationRef("reports:requestReport"),
     getReport: asQueryRef("reports:getReport"),
     getReportJob: asQueryRef("reports:getReportJob"),

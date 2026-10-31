@@ -24,6 +24,8 @@ interface InterviewRoomProps {
   onFinish: () => void | Promise<void>;
   /** Optional sink for finalized transcript turns. */
   onTranscript?: (item: TranscriptItem) => void;
+  /** Optional sink for every finalized caption (new or refined). */
+  onSegment?: (item: TranscriptItem, isUpdate: boolean) => void;
   isFinishing?: boolean;
   /** Epoch ms when the interview started (persisted in Convex). */
   startedAt?: number | null;
@@ -109,12 +111,13 @@ export function InterviewRoom({
   role,
   onFinish,
   onTranscript,
+  onSegment,
   isFinishing = false,
   startedAt = null,
   durationMinutes,
   onTimeExpired,
 }: InterviewRoomProps) {
-  const { call } = useStreamSession();
+  const { call, session } = useStreamSession();
   const handleExpire = useCallback(() => {
     void (onTimeExpired ?? onFinish)();
   }, [onTimeExpired, onFinish]);
@@ -153,7 +156,12 @@ export function InterviewRoom({
               Auto-scroll
             </span>
           </div>
-          <TranscriptionPanel call={call} onTranscript={onTranscript} />
+          <TranscriptionPanel
+            call={call}
+            candidateId={session.user.id}
+            onTranscript={onTranscript}
+            onSegment={onSegment}
+          />
         </div>
       </main>
     </div>

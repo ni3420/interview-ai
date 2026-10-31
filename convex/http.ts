@@ -30,6 +30,16 @@ function optionalId(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+function optionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+const COMPLETION_STATUSES = new Set([
+  "complete",
+  "partial",
+  "insufficient_evidence",
+]);
+
 http.route({
   path: "/worker/resume-complete",
   method: "POST",
@@ -156,6 +166,8 @@ http.route({
     try {
       await ctx.runMutation(internal.worker.startReportJob, {
         interviewId: interviewId as never,
+        version: optionalNumber(body.version),
+        attempt: optionalNumber(body.attempt),
       });
     } catch (error) {
       console.error("worker/report-start rejected", error);
@@ -186,53 +198,54 @@ http.route({
     const weaknesses = asStringArray(body.weaknesses);
     const recommendations = asStringArray(body.recommendations);
     const rawScores = body.questionScores;
+    const overallScore =
+      body.overallScore === null
+        ? null
+        : typeof body.overallScore === "number"
+          ? body.overallScore
+          : undefined;
+    const completionStatus =
+      typeof body.completionStatus === "string" &&
+      COMPLETION_STATUSES.has(body.completionStatus)
+        ? body.completionStatus
+        : undefined;
 
     if (
       !interviewId ||
-      typeof body.overallScore !== "number" ||
+      overallScore === undefined ||
       !strengths ||
-      strengths.length === 0 ||
       !weaknesses ||
-      weaknesses.length === 0 ||
       !recommendations ||
-      recommendations.length === 0 ||
-      !Array.isArray(rawScores)
+      !Array.isArray(rawScores) ||
+      (body.completionStatus !== undefined && !completionStatus) ||
+      (body.counts !== undefined && typeof body.counts !== "object") ||
+      (body.skillScores !== undefined && typeof body.skillScores !== "object") ||
+      (body.qualityWarnings !== undefined && !Array.isArray(body.qualityWarnings))
     ) {
       return new Response("Invalid payload", { status: 400 });
-    }
-
-    const questionScores: Array<{
-      questionIndex: number;
-      score: number;
-      feedback: string;
-    }> = [];
-    for (const raw of rawScores) {
-      if (!raw || typeof raw !== "object") {
-        return new Response("Invalid payload", { status: 400 });
-      }
-      const score = raw as Record<string, unknown>;
-      if (
-        typeof score.questionIndex !== "number" ||
-        typeof score.score !== "number" ||
-        typeof score.feedback !== "string"
-      ) {
-        return new Response("Invalid payload", { status: 400 });
-      }
-      questionScores.push({
-        questionIndex: score.questionIndex,
-        score: score.score,
-        feedback: score.feedback,
-      });
     }
 
     try {
       await ctx.runMutation(internal.worker.completeReportJob, {
         interviewId: interviewId as never,
-        overallScore: body.overallScore,
+        overallScore,
         strengths,
         weaknesses,
         recommendations,
-        questionScores,
+        // Convex argument validators enforce the full question shape; an
+        // invalid score or evidence entry is rejected below as a 400.
+        questionScores: rawScores as never,
+        version: optionalNumber(body.version),
+        attempt: optionalNumber(body.attempt),
+        summary: typeof body.summary === "string" ? body.summary : undefined,
+        completionStatus: completionStatus as never,
+        counts: body.counts as never,
+        skillScores: body.skillScores as never,
+        qualityWarnings: body.qualityWarnings as never,
+        promptVersion:
+          typeof body.promptVersion === "string" ? body.promptVersion : undefined,
+        rubricVersion:
+          typeof body.rubricVersion === "string" ? body.rubricVersion : undefined,
       });
     } catch (error) {
       console.error("worker/report-complete rejected", error);
@@ -267,6 +280,9 @@ http.route({
       await ctx.runMutation(internal.worker.failReportJob, {
         interviewId: interviewId as never,
         error: typeof body.error === "string" ? body.error : undefined,
+        errorCode:
+          typeof body.errorCode === "string" ? body.errorCode : undefined,
+        version: optionalNumber(body.version),
       });
     } catch (error) {
       console.error("worker/report-failed rejected", error);

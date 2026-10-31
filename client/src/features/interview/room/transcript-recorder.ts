@@ -38,7 +38,9 @@ export interface RecordedAnswer {
 
 export function isInterviewerTurn(item: TranscriptItem): boolean {
   return (
-    item.speakerId === AI_INTERVIEWER_ID || item.speaker === AI_INTERVIEWER_NAME
+    item.speakerRole === "interviewer" ||
+    item.speakerId === AI_INTERVIEWER_ID ||
+    item.speaker === AI_INTERVIEWER_NAME
   );
 }
 
@@ -66,6 +68,13 @@ export function applyTranscriptTurn(
     };
   }
 
+  // Unknown speakers and speech before the first real question are not
+  // answers. The live view may still display them; they never enter the
+  // evaluated Q&A rows.
+  if (item.speakerRole !== "candidate" || !state.pendingQuestion) {
+    return { state, answer: null };
+  }
+
   const startsNewAnswer = state.currentIndex < 0;
   const questionIndex = startsNewAnswer ? state.nextIndex : state.currentIndex;
   const answer = startsNewAnswer
@@ -81,7 +90,7 @@ export function applyTranscriptTurn(
     },
     answer: {
       questionIndex,
-      question: state.pendingQuestion || "Interview question",
+      question: state.pendingQuestion,
       answer,
       followUpCount: 0,
     },

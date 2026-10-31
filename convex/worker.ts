@@ -1,6 +1,13 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { questionScoreValidator, upsertReport } from "./reports";
+import {
+  completionStatusValidator,
+  qualityWarningsValidator,
+  reportCountsValidator,
+  reportQuestionScoreValidator,
+  skillScoresValidator,
+} from "./schema";
+import { upsertReport } from "./reports";
 
 // Shape of the interview plan produced by the AI service and persisted for the
 // live interview. `questions` is what the lobby and interview page consume.
@@ -109,16 +116,40 @@ export const getReportContext = internalQuery({
       (a, b) => a.questionIndex - b.questionIndex
     );
 
+    const segments = await ctx.db
+      .query("transcriptSegments")
+      .withIndex("by_interview", (q) => q.eq("interviewId", args.interviewId))
+      .collect();
+    const job = await ctx.db
+      .query("reportJobs")
+      .withIndex("by_interview", (q) => q.eq("interviewId", args.interviewId))
+      .unique();
+
     return {
       interviewId: interview._id,
       userId: interview.userId,
       resumeText: interview.resumeText ?? "",
       jobDescription: interview.jobDescription,
+      version: job?.version ?? 1,
+      attempt: job?.attempt ?? 1,
       qaPairs: orderedAnswers.map((answer) => ({
         questionIndex: answer.questionIndex,
         question: answer.question,
         answer: answer.answer,
       })),
+      // Raw, finalized captions. The AI service re-classifies these; the
+      // stored `kind` is intentionally not forwarded as authoritative.
+      segments: segments
+        .sort((a, b) => a.start - b.start)
+        .map((segment) => ({
+          id: segment._id,
+          speaker: segment.speaker,
+          start: segment.start,
+          end: segment.end,
+          text: segment.text,
+          asrConfidence: segment.asrConfidence,
+          speakerConfidence: segment.speakerConfidence,
+        })),
     };
   },
 });
@@ -129,7 +160,11 @@ export const getReportContext = internalQuery({
  * the model".
  */
 export const startReportJob = internalMutation({
-  args: { interviewId: v.id("interviews") },
+  args: {
+    interviewId: v.id("interviews"),
+    version: v.optional(v.number()),
+    attempt: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
     const job = await ctx.db
       .query("reportJobs")
@@ -137,11 +172,24 @@ export const startReportJob = internalMutation({
       .unique();
     if (!job) return { success: false };
 
+    // A stale worker for an older version must not mark the current version as
+    // processing.
+    if (
+      args.version !== undefined &&
+      job.version !== undefined &&
+      job.version !== args.version
+    ) {
+      return { success: false, stale: true };
+    }
+
     const now = Date.now();
     await ctx.db.patch(job._id, {
       status: "processing",
+      version: args.version ?? job.version ?? 1,
+      attempt: args.attempt ?? job.attempt ?? 1,
       startedAt: job.startedAt ?? now,
       error: undefined,
+      errorCode: undefined,
       updatedAt: now,
     });
 
@@ -151,29 +199,65 @@ export const startReportJob = internalMutation({
 
 /**
  * Persists a successful evaluation and completes the job. The upsert is
- * idempotent, so a retried attempt can safely overwrite a previous partial
- * result.
+ * idempotent per version, so a retried attempt can safely overwrite its own
+ * previous result without destroying older versions.
  */
 export const completeReportJob = internalMutation({
   args: {
     interviewId: v.id("interviews"),
-    overallScore: v.number(),
+    overallScore: v.union(v.number(), v.null()),
     strengths: v.array(v.string()),
     weaknesses: v.array(v.string()),
     recommendations: v.array(v.string()),
-    questionScores: v.array(questionScoreValidator),
+    questionScores: v.array(reportQuestionScoreValidator),
+    version: v.optional(v.number()),
+    attempt: v.optional(v.number()),
+    summary: v.optional(v.string()),
+    completionStatus: v.optional(completionStatusValidator),
+    counts: v.optional(reportCountsValidator),
+    skillScores: v.optional(skillScoresValidator),
+    qualityWarnings: v.optional(qualityWarningsValidator),
+    promptVersion: v.optional(v.string()),
+    rubricVersion: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const interview = await ctx.db.get(args.interviewId);
     if (!interview) throw new Error("Interview not found");
 
-    if (args.overallScore < 0 || args.overallScore > 100) {
+    const job = await ctx.db
+      .query("reportJobs")
+      .withIndex("by_interview", (q) => q.eq("interviewId", args.interviewId))
+      .unique();
+    const version = args.version ?? job?.version ?? 1;
+
+    // Ignore completion from a superseded attempt (regeneration started while
+    // the old version was still running). The old report is not written.
+    if (job?.version !== undefined && job.version !== version) {
+      return { success: false, stale: true };
+    }
+
+    if (
+      args.overallScore !== null &&
+      (args.overallScore < 0 || args.overallScore > 10)
+    ) {
       throw new Error("Invalid overall score");
     }
-    for (const score of args.questionScores) {
-      if (score.score < 0 || score.score > 100) {
+    const scored = args.questionScores.filter(
+      (score) => score.score !== null
+    );
+    for (const score of scored) {
+      if (score.score === null || score.score < 0 || score.score > 10) {
         throw new Error("Invalid question score");
       }
+    }
+    if (args.overallScore === null && scored.length > 0) {
+      throw new Error("Missing overall score");
+    }
+    if (args.overallScore !== null && scored.length === 0) {
+      throw new Error("Overall score without evaluated questions");
+    }
+    if (args.counts && args.counts.evaluated !== scored.length) {
+      throw new Error("Evaluation counts do not match scores");
     }
 
     const reportId = await upsertReport(ctx, {
@@ -184,17 +268,29 @@ export const completeReportJob = internalMutation({
       weaknesses: args.weaknesses,
       recommendations: args.recommendations,
       questionScores: args.questionScores,
+      version,
+      schemaVersion: "report-v1",
+      scoreScale: 10,
+      summary: args.summary,
+      completionStatus: args.completionStatus,
+      counts: args.counts,
+      skillScores: args.skillScores,
+      qualityWarnings: args.qualityWarnings,
+      promptVersion: args.promptVersion,
+      rubricVersion: args.rubricVersion,
     });
 
     const now = Date.now();
-    const job = await ctx.db
-      .query("reportJobs")
-      .withIndex("by_interview", (q) => q.eq("interviewId", args.interviewId))
-      .unique();
     if (job) {
       await ctx.db.patch(job._id, {
         status: "completed",
+        version,
+        attempt: args.attempt ?? job.attempt,
+        promptVersion: args.promptVersion,
+        rubricVersion: args.rubricVersion,
+        reportId,
         error: undefined,
+        errorCode: undefined,
         completedAt: now,
         updatedAt: now,
       });
@@ -209,6 +305,8 @@ export const failReportJob = internalMutation({
   args: {
     interviewId: v.id("interviews"),
     error: v.optional(v.string()),
+    errorCode: v.optional(v.string()),
+    version: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const job = await ctx.db
@@ -217,9 +315,19 @@ export const failReportJob = internalMutation({
       .unique();
     if (!job) return { success: false };
 
+    if (
+      args.version !== undefined &&
+      job.version !== undefined &&
+      job.version !== args.version
+    ) {
+      return { success: false, stale: true };
+    }
+
     await ctx.db.patch(job._id, {
       status: "failed",
+      // Never persist a raw provider message; the UI maps the stable code.
       error: (args.error ?? "Report generation failed").slice(0, 500),
+      errorCode: args.errorCode ?? "report_generation_failed",
       updatedAt: Date.now(),
     });
 

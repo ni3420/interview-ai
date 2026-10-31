@@ -22,14 +22,31 @@ class GeminiProvider:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
     )
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        seed: int | None = None,
+    ) -> str:
+        config: dict[str, object] = {
+            "temperature": (
+                settings.gemini_temperature
+                if temperature is None
+                else temperature
+            ),
+            "max_output_tokens": (
+                settings.gemini_max_tokens if max_tokens is None else max_tokens
+            ),
+        }
+        if seed is not None:
+            config["seed"] = seed
+
         response = await self._get_client().aio.models.generate_content(
             model=settings.gemini_model,
             contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=settings.gemini_temperature,
-                max_output_tokens=settings.gemini_max_tokens,
-            ),
+            config=types.GenerateContentConfig(**config),
         )
         if not response.text:
             raise ValueError("Empty response from Gemini")

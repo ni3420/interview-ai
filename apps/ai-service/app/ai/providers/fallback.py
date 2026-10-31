@@ -82,9 +82,18 @@ class FallbackLLMProvider:
         self._fallback_available = fallback_available
         self._fallback_name = fallback_name
 
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        seed: int | None = None,
+    ) -> str:
         try:
-            return await self._primary.generate(prompt)
+            return await self._invoke(
+                self._primary, prompt, temperature, max_tokens, seed
+            )
         except Exception as error:
             cause = _root_cause(error)
             if not is_switchable_error(cause):
@@ -99,4 +108,28 @@ class FallbackLLMProvider:
                 getattr(cause, "status", "") or "unknown",
                 self._fallback_name,
             )
-            return await self._fallback.generate(prompt)
+            return await self._invoke(
+                self._fallback, prompt, temperature, max_tokens, seed
+            )
+
+    @staticmethod
+    async def _invoke(
+        provider: LLMProvider,
+        prompt: str,
+        temperature: float | None,
+        max_tokens: int | None,
+        seed: int | None,
+    ) -> str:
+        options: dict[str, float | int] = {}
+        if temperature is not None:
+            options["temperature"] = temperature
+        if max_tokens is not None:
+            options["max_tokens"] = max_tokens
+        if seed is not None:
+            options["seed"] = seed
+
+        # Older/deterministic callers pass no options; keep their provider
+        # contract unchanged.
+        if not options:
+            return await provider.generate(prompt)
+        return await provider.generate(prompt, **options)

@@ -144,8 +144,31 @@ describe("POST /api/report/generate", () => {
     expect(mocks.mutation).toHaveBeenCalledTimes(1);
     expect(mocks.queueAdd).toHaveBeenCalledWith(
       "evaluate-interview",
-      { interviewId: "interview-1" },
-      { jobId: "report-interview-1" }
+      { interviewId: "interview-1", version: 1 },
+      { jobId: "report-interview-1-v1" }
+    );
+  });
+
+  it("enqueues a new version when regeneration is requested", async () => {
+    mocks.mutation.mockResolvedValueOnce({
+      status: "queued",
+      shouldEnqueue: true,
+      version: 2,
+    });
+
+    const response = await POST(
+      jsonRequest({ interviewId: "interview-1", regenerate: true })
+    );
+
+    expect(response.status).toBe(202);
+    expect(mocks.mutation).toHaveBeenCalledWith(expect.anything(), {
+      interviewId: "interview-1",
+      regenerate: true,
+    });
+    expect(mocks.queueAdd).toHaveBeenCalledWith(
+      "evaluate-interview",
+      { interviewId: "interview-1", version: 2 },
+      { jobId: "report-interview-1-v2" }
     );
   });
 

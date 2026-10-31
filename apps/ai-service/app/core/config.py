@@ -33,6 +33,17 @@ class Settings(BaseSettings):
     ollama_max_tokens: int = 512
     ollama_timeout_seconds: float = 900.0
 
+    # --- Interview report rubric ---------------------------------------------
+    # Optional percentage overrides for the rubric in ``app.core.rubric``. The
+    # resolved weights must sum to 100 or the report endpoint refuses to run.
+    report_rubric_weights: dict[str, int] = {}
+    # Grading is deterministic: temperature 0 plus a fixed seed where the
+    # provider supports it.
+    report_temperature: float = 0.0
+    report_seed: int = 42
+    # Bound the JSON response so a runaway model cannot exhaust the worker.
+    report_max_tokens: int = 4096
+
     service_api_key: str = "dev-secret-key"
 
     cors_origins: list[str] = ["http://localhost:3000"]

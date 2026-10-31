@@ -7,6 +7,8 @@ export const REPORT_QUEUE_NAME = "report-evaluation";
 export interface ReportJobPayload {
   /** Convex `interviews` document id to evaluate. */
   interviewId: string;
+  /** Report version; the worker and Convex both reject stale completions. */
+  version?: number;
 }
 
 /**
@@ -14,8 +16,13 @@ export interface ReportJobPayload {
  * included: the worker fetches them from Convex over the authenticated bridge,
  * so personal data never sits in Redis.
  */
-export function buildReportJob(interviewId: string): ReportJobPayload {
-  return { interviewId };
+export function buildReportJob(
+  interviewId: string,
+  version?: number
+): ReportJobPayload {
+  return version === undefined
+    ? { interviewId }
+    : { interviewId, version };
 }
 
 // Reuse the connection/queue across HMR reloads and route invocations instead

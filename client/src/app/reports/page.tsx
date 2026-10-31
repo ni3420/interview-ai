@@ -29,11 +29,17 @@ import {
 import { Card, CardContent } from "@/features/components/common/Card";
 import { Badge } from "@/features/components/common/Badge";
 import { Button } from "@/features/components/common/Button";
+import {
+  formatScore,
+  reportScoreScale,
+  RUBRIC_SCORE_SCALE,
+} from "@/lib/interview-report";
 
 interface ReportRecord {
   _id: string;
   interviewId: string;
-  overallScore: number;
+  overallScore: number | null;
+  scoreScale?: number;
   createdAt: number;
 }
 
@@ -65,6 +71,24 @@ function truncateText(text: string, maxLength: number = 45): string {
   const cleanedText = text.replace(/\s+/g, " ").trim();
   if (cleanedText.length <= maxLength) return cleanedText;
   return `${cleanedText.slice(0, maxLength)}...`;
+}
+
+// Legacy reports are 0-100 and rubric reports are 0-10. Analytics averages
+// mixed scales, so normalise each score to a percentage first.
+function scorePercent(report: ReportRecord): number | null {
+  if (typeof report.overallScore !== "number") return null;
+  return reportScoreScale(report) === RUBRIC_SCORE_SCALE
+    ? report.overallScore * 10
+    : report.overallScore;
+}
+
+function scoreBadgeStatus(
+  percent: number | null
+): "success" | "warning" | "neutral" {
+  if (percent === null) return "neutral";
+  if (percent >= 80) return "success";
+  if (percent >= 60) return "warning";
+  return "neutral";
 }
 
 export default function ReportsPage() {
@@ -116,7 +140,9 @@ export default function ReportsPage() {
 
   const filtered = reports.filter((report) => withinRange(report.createdAt, range));
 
-  const scores = reports.map((report) => report.overallScore);
+  const scores = reports
+    .map(scorePercent)
+    .filter((score): score is number => score !== null);
   const avgScore =
     scores.length === 0
       ? 0
@@ -125,6 +151,7 @@ export default function ReportsPage() {
   const completed = interviews.filter((item) => item.status === "completed").length;
 
   const chartData: ChartPoint[] = filtered
+    .filter((report) => scorePercent(report) !== null)
     .slice()
     .sort((a, b) => a.createdAt - b.createdAt)
     .slice(-8)
@@ -133,13 +160,13 @@ export default function ReportsPage() {
         month: "short",
         day: "numeric",
       }),
-      value: report.overallScore,
+      value: scorePercent(report) as number,
     }));
 
   const exportRows = filtered.map((report) => ({
     Date: new Date(report.createdAt).toLocaleDateString("en-US"),
     Role: roleById.get(report.interviewId) ?? "Interview session",
-    Score: report.overallScore,
+    Score: formatScore(report.overallScore, reportScoreScale(report)),
   }));
 
   return (
@@ -171,14 +198,14 @@ export default function ReportsPage() {
           />
           <MetricSummaryCard
             label="Average Score"
-            value={String(avgScore)}
-            deltaLabel="Across sessions"
+            value={`${avgScore}%`}
+            deltaLabel="Normalised across scales"
             icon={Target}
             accent="bg-blue-500/10 text-blue-600 dark:text-blue-400"
           />
           <MetricSummaryCard
             label="Best Score"
-            value={String(bestScore)}
+            value={`${bestScore}%`}
             deltaLabel="Personal record"
             icon={Award}
             accent="bg-amber-500/10 text-amber-600 dark:text-amber-400"
@@ -242,15 +269,12 @@ export default function ReportsPage() {
                               </p>
                             </div>
                             <Badge
-                              status={
-                                report.overallScore >= 80
-                                  ? "success"
-                                  : report.overallScore >= 60
-                                    ? "warning"
-                                    : "neutral"
-                              }
+                              status={scoreBadgeStatus(scorePercent(report))}
                             >
-                              {report.overallScore}/100
+                              {formatScore(
+                                report.overallScore,
+                                reportScoreScale(report)
+                              )}
                             </Badge>
                           </div>
 
@@ -305,15 +329,12 @@ export default function ReportsPage() {
                               </td>
                               <td className="px-6 py-4">
                                 <Badge
-                                  status={
-                                    report.overallScore >= 80
-                                      ? "success"
-                                      : report.overallScore >= 60
-                                        ? "warning"
-                                        : "neutral"
-                                  }
+                                  status={scoreBadgeStatus(scorePercent(report))}
                                 >
-                                  {report.overallScore}/100
+                                  {formatScore(
+                                    report.overallScore,
+                                    reportScoreScale(report)
+                                  )}
                                 </Badge>
                               </td>
                               <td className="px-6 py-4 text-right">

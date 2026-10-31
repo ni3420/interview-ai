@@ -12,8 +12,12 @@ from app.schemas.interview import (
 from app.api.deps import verify_api_key
 from app.ai.providers.factory import get_llm_provider
 from app.ai.prompts.interview import INTERVIEW_PLAN_PROMPT, NEXT_QUESTION_PROMPT, EVALUATION_PROMPT
+from app.ai.prompts.report import REPORT_PROMPT_VERSION
 from app.core.config import settings
 from app.core.metrics import timed
+from app.core.rubric import RUBRIC_VERSION, RubricError
+from app.schemas.report import ReportRequest, ReportResponse
+from app.services.report_evaluation import ReportEvaluationError, build_report
 import json
 import logging
 
@@ -111,6 +115,61 @@ async def generate_next_question(request: NextQuestionRequest):
     except Exception as e:
         logging.error("Failed to generate question", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to generate question")
+
+
+@router.post(
+    "/report",
+    response_model=ReportResponse,
+    responses={
+        401: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        500: {"model": ErrorResponse},
+        502: {"model": ErrorResponse},
+    },
+    dependencies=[Depends(verify_api_key)],
+)
+async def generate_interview_report(request: ReportRequest):
+    """Evidence-based report with rubric scoring.
+
+    The AI service re-derives segment kinds, matches answers to questions by
+    time window, validates evidence quotes and computes all weighted scores.
+    A 502 means the model output was unusable; nothing is returned that could be
+    persisted as a completed report.
+    """
+    try:
+        provider = _configured_provider()
+        with timed(
+            "llm.generate",
+            conversation="report",
+            configuredProvider=provider,
+            configuredModel=_configured_model(provider),
+            promptVersion=REPORT_PROMPT_VERSION,
+            rubricVersion=RUBRIC_VERSION,
+            segmentCount=len(request.segments),
+            questionCount=len(request.qa_pairs),
+        ):
+            return await build_report(request, provider=get_llm_provider())
+    except RubricError as error:
+        logging.error("Invalid report rubric: %s", error)
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "invalid_rubric", "message": str(error)},
+        ) from error
+    except ReportEvaluationError as error:
+        logging.error("Report evaluation failed: %s", error)
+        raise HTTPException(
+            status_code=502,
+            detail={"code": error.code, "message": error.message},
+        ) from error
+    except Exception as error:
+        logging.error("Failed to generate report", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "report_generation_failed",
+                "message": "Failed to generate report",
+            },
+        ) from error
 
 
 @router.post(

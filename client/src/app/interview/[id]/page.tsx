@@ -40,7 +40,7 @@ export default function InterviewPage() {
     | undefined
     | null;
   const updateStatus = useMutation(api.interviews.updateInterviewStatus);
-  const recordTranscript = useTranscriptRecorder(interviewId);
+  const { recordTurn, recordSegment } = useTranscriptRecorder(interviewId);
 
   const [isFinishing, setIsFinishing] = useState(false);
 
@@ -100,7 +100,8 @@ export default function InterviewPage() {
       <InterviewRoom
         role={interview.jobDescription}
         onFinish={handleFinish}
-        onTranscript={recordTranscript}
+        onTranscript={recordTurn}
+        onSegment={recordSegment}
         isFinishing={isFinishing}
         startedAt={interview.startedAt ?? null}
         durationMinutes={interview.durationMinutes ?? 30}

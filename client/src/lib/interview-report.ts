@@ -20,7 +20,7 @@ export interface AnswerLike {
 
 export interface QuestionScoreLike {
   questionIndex: number;
-  score: number;
+  score: number | null;
   feedback: string;
 }
 
@@ -28,8 +28,44 @@ export interface QuestionBreakdownItem {
   questionIndex: number;
   question: string;
   answer: string;
-  score?: number;
+  score?: number | null;
   feedback?: string;
+}
+
+// Reports generated with the rubric store scores on a 0-10 scale and set
+// `scoreScale`. Everything older used 0-100 and has no field.
+export const LEGACY_SCORE_SCALE = 100;
+export const RUBRIC_SCORE_SCALE = 10;
+
+export function reportScoreScale(report: {
+  scoreScale?: number;
+} | null | undefined): number {
+  return report?.scoreScale === RUBRIC_SCORE_SCALE
+    ? RUBRIC_SCORE_SCALE
+    : LEGACY_SCORE_SCALE;
+}
+
+/**
+ * Renders a score with its scale so the same component can show rubric
+ * reports (7.5 / 10) and legacy reports (85 / 100) without guessing.
+ */
+export function formatScore(
+  score: number | null | undefined,
+  scale: number
+): string {
+  if (typeof score !== "number" || Number.isNaN(score)) return "Not scored";
+  const value = scale === LEGACY_SCORE_SCALE ? Math.round(score) : score.toFixed(1);
+  return `${value} / ${scale}`;
+}
+
+/** Text band shown next to the number, so meaning never relies on colour. */
+export function scoreBand(score: number, scale: number): string {
+  if (scale <= 0) return "";
+  const ratio = score / scale;
+  if (ratio >= 0.8) return "Strong";
+  if (ratio >= 0.6) return "Competent";
+  if (ratio >= 0.4) return "Developing";
+  return "Needs work";
 }
 
 /**

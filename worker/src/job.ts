@@ -34,6 +34,8 @@ export const RESUME_QUEUE_NAME = "resume-processing";
 export const reportJobSchema = z.object({
   /** Convex `interviews` document id. */
   interviewId: z.string().min(1),
+  /** Report version; omitted by older producers and treated as 1. */
+  version: z.number().int().min(1).optional(),
 });
 
 export type ReportJob = z.infer<typeof reportJobSchema>;

@@ -14,6 +14,7 @@ import type * as http from "../http.js";
 import type * as interviews from "../interviews.js";
 import type * as reports from "../reports.js";
 import type * as resume from "../resume.js";
+import type * as transcriptText from "../transcriptText.js";
 import type * as users from "../users.js";
 import type * as worker from "../worker.js";
 
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   interviews: typeof interviews;
   reports: typeof reports;
   resume: typeof resume;
+  transcriptText: typeof transcriptText;
   users: typeof users;
   worker: typeof worker;
 }>;

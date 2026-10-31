@@ -40,7 +40,27 @@ class OllamaProvider:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
     )
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        seed: int | None = None,
+    ) -> str:
+        options: dict[str, object] = {
+            "temperature": (
+                settings.ollama_temperature
+                if temperature is None
+                else temperature
+            ),
+            "num_predict": (
+                settings.ollama_max_tokens if max_tokens is None else max_tokens
+            ),
+        }
+        if seed is not None:
+            options["seed"] = seed
+
         async with httpx.AsyncClient(
             base_url=settings.ollama_base_url, timeout=settings.ollama_timeout_seconds
         ) as client:
@@ -50,10 +70,7 @@ class OllamaProvider:
                     "model": settings.ollama_model,
                     "prompt": prompt,
                     "stream": False,
-                    "options": {
-                        "temperature": settings.ollama_temperature,
-                        "num_predict": settings.ollama_max_tokens,
-                    },
+                    "options": options,
                 },
             )
             response.raise_for_status()

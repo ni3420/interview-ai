@@ -7,15 +7,27 @@ import { cn } from "@/lib/utils";
 import { AI_INTERVIEWER_ID, AI_INTERVIEWER_NAME } from "./constants";
 import { logAgentAudibleOnce } from "./room-timing";
 
+export type TranscriptSpeakerRole = "interviewer" | "candidate" | "unknown";
+
 /** A single finalized line of speech shown in the transcript panel. */
 export interface TranscriptItem {
   id: string;
+  /** Stream's stable utterance key (speaker + start time). */
+  segmentKey: string;
   /** Stream user id of the speaker, when available. */
   speakerId: string;
   /** Display name of the speaker. */
   speaker: string;
+  speakerRole: TranscriptSpeakerRole;
+  /** 1 for a known participant, 0 for an unidentified speaker. */
+  speakerConfidence: number;
+  /** Epoch ms from Stream's caption start/end timestamps. */
+  start: number;
+  end: number;
   text: string;
   timestamp: string;
+  /** The transcription provider does not currently supply this. */
+  asrConfidence?: number;
   isFinal: boolean;
 }
 
@@ -26,6 +38,7 @@ interface ClosedCaptionEvent {
     text?: string;
     speaker_id?: string;
     start_time?: string;
+    end_time?: string;
     user?: { id?: string; name?: string };
   };
 }
@@ -37,23 +50,66 @@ interface DisplayCaption extends TranscriptItem {
 
 interface TranscriptionPanelProps {
   call: Call;
-  /** Called once for every finalized utterance, e.g. to persist it. */
+  /** The signed-in candidate's Stream user id. */
+  candidateId?: string;
+  /** Called once for every new finalized utterance, e.g. to persist an answer. */
   onTranscript?: (item: TranscriptItem) => void;
+  /**
+   * Called for every finalized caption, including a refined re-delivery of an
+   * existing utterance. Persisting this upserts the raw segment so the stored
+   * transcript keeps the latest ASR text without duplicating the turn.
+   */
+  onSegment?: (item: TranscriptItem, isUpdate: boolean) => void;
   className?: string;
 }
 
-function formatTime(): string {
-  return new Date().toLocaleTimeString([], {
+/** Parses Stream's caption timestamps; returns null when unusable. */
+export function parseCaptionTime(value: string | undefined): number | null {
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function formatTime(at: number): string {
+  return new Date(at).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
 }
 
+function attributeSpeaker(
+  speakerId: string,
+  speakerName: string | undefined,
+  candidateId: string | undefined
+): { role: TranscriptSpeakerRole; confidence: number; displayName: string } {
+  if (
+    speakerId === AI_INTERVIEWER_ID ||
+    speakerName === AI_INTERVIEWER_NAME
+  ) {
+    return {
+      role: "interviewer",
+      confidence: 1,
+      displayName: speakerName ?? AI_INTERVIEWER_NAME,
+    };
+  }
+
+  // A known candidate identity is the only positive attribution. Anything else
+  // (an observer, a second tab, or unlabelled diarization) stays unknown and is
+  // never treated as the candidate.
+  if (candidateId && speakerId === candidateId) {
+    return { role: "candidate", confidence: 1, displayName: speakerName ?? "You" };
+  }
+
+  return {
+    role: "unknown",
+    confidence: 0,
+    displayName: speakerName ?? speakerId ?? "Participant",
+  };
+}
+
 function isInterviewer(item: TranscriptItem): boolean {
-  return (
-    item.speakerId === AI_INTERVIEWER_ID || item.speaker === AI_INTERVIEWER_NAME
-  );
+  return item.speakerRole === "interviewer";
 }
 
 interface QuestionGroup {
@@ -97,18 +153,24 @@ function groupByQuestion(captions: DisplayCaption[]): QuestionGroup[] {
  */
 export function TranscriptionPanel({
   call,
+  candidateId,
   onTranscript,
+  onSegment,
   className,
 }: TranscriptionPanelProps) {
   const [captions, setCaptions] = useState<DisplayCaption[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const onTranscriptRef = useRef(onTranscript);
+  const onSegmentRef = useRef(onSegment);
+  const candidateIdRef = useRef(candidateId);
   const seenUtterancesRef = useRef<Set<string>>(new Set());
 
-  // Keep the latest callback without re-subscribing on every render.
+  // Keep the latest callbacks without re-subscribing on every render.
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
-  }, [onTranscript]);
+    onSegmentRef.current = onSegment;
+    candidateIdRef.current = candidateId;
+  }, [onTranscript, onSegment, candidateId]);
 
   useEffect(() => {
     if (!call) return;
@@ -118,18 +180,34 @@ export function TranscriptionPanel({
       const text = caption?.text?.trim();
       if (!caption || !text) return;
 
-      const speakerId = caption.user?.id ?? caption.speaker_id ?? "";
+      // Stream's CallClosedCaption carries `speaker_id`, `start_time` and
+      // `end_time`; the `user` object is only present on some SDK variants.
+      const speakerId = caption.speaker_id ?? caption.user?.id ?? "";
       const utteranceKey = `${speakerId}|${
         caption.start_time ?? caption.id ?? `${Date.now()}`
       }`;
+      const start = parseCaptionTime(caption.start_time) ?? Date.now();
+      const end = parseCaptionTime(caption.end_time) ?? start;
+      const attribution = attributeSpeaker(
+        speakerId,
+        caption.user?.name,
+        candidateIdRef.current
+      );
       const item: TranscriptItem = {
         id: caption.id ?? utteranceKey,
+        segmentKey: utteranceKey,
         speakerId,
-        speaker: caption.user?.name ?? caption.speaker_id ?? "Participant",
+        speaker: attribution.displayName,
+        speakerRole: attribution.role,
+        speakerConfidence: attribution.confidence,
+        start,
+        end: Math.max(end, start),
         text,
-        timestamp: formatTime(),
+        timestamp: formatTime(start),
         isFinal: true,
       };
+
+      const isUpdate = seenUtterancesRef.current.has(utteranceKey);
 
       setCaptions((previous) => {
         const index = previous.findIndex(
@@ -140,11 +218,13 @@ export function TranscriptionPanel({
         }
         // Same utterance re-delivered: keep the latest text in place.
         const next = previous.slice();
-        next[index] = { ...next[index], text };
+        next[index] = { ...next[index], ...item, utteranceKey };
         return next;
       });
 
-      if (!seenUtterancesRef.current.has(utteranceKey)) {
+      onSegmentRef.current?.(item, isUpdate);
+
+      if (!isUpdate) {
         seenUtterancesRef.current.add(utteranceKey);
         if (isInterviewer(item)) logAgentAudibleOnce();
         onTranscriptRef.current?.(item);

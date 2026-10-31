@@ -10,8 +10,13 @@ import type { TranscriptItem } from "@/features/interview/room/transcription-pan
 function turn(overrides: Partial<TranscriptItem>): TranscriptItem {
   return {
     id: "t",
+    segmentKey: "t",
     speakerId: "user_1",
     speaker: "Candidate",
+    speakerRole: "candidate",
+    speakerConfidence: 1,
+    start: 0,
+    end: 1,
     text: "Some speech",
     timestamp: "00:00:00",
     isFinal: true,
@@ -69,14 +74,28 @@ describe("applyTranscriptTurn", () => {
     expect(state.nextIndex).toBe(1);
   });
 
-  it("falls back to a generic question before any interviewer turn", () => {
-    const { answer } = applyTranscriptTurn(
+  it("ignores candidate speech before a question has been asked", () => {
+    const { answer, state } = applyTranscriptTurn(
       initialRecorderState,
       turn({ text: "Hello?" })
     );
 
-    expect(answer?.question).toBe("Interview question");
-    expect(answer?.questionIndex).toBe(0);
+    expect(answer).toBeNull();
+    expect(state.nextIndex).toBe(0);
+  });
+
+  it("never records an unknown speaker as a candidate answer", () => {
+    const withQuestion = applyTranscriptTurn(
+      initialRecorderState,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "Tell me about yourself." })
+    ).state;
+
+    const { answer } = applyTranscriptTurn(
+      withQuestion,
+      turn({ speakerRole: "unknown", speakerId: "observer", text: "I built it." })
+    );
+
+    expect(answer).toBeNull();
   });
 
   it("increments the index across multiple answers", () => {

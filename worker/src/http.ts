@@ -3,6 +3,17 @@ import https from "node:https";
 import { URL } from "node:url";
 import { config } from "./config";
 
+/** HTTP failure with the response body preserved for stable error-code mapping. */
+export class HttpError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly body: string,
+    url: string
+  ) {
+    super(`Request to ${url} failed (${status}): ${body.slice(0, 200)}`);
+  }
+}
+
 /**
  * Minimal JSON POST helper.
  *
@@ -42,11 +53,7 @@ export function postJson<TResponse>(
           const text = Buffer.concat(chunks).toString("utf8");
           const status = response.statusCode ?? 0;
           if (status < 200 || status >= 300) {
-            reject(
-              new Error(
-                `Request to ${url} failed (${status}): ${text.slice(0, 200)}`
-              )
-            );
+            reject(new HttpError(status, text, url));
             return;
           }
           try {
