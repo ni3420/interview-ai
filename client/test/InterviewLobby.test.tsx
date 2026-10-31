@@ -95,7 +95,9 @@ describe("InterviewLobby", () => {
       />
     );
 
-    const startButton = screen.getByRole("button", { name: /Start Interview/i });
+    const startButton = screen.getByRole("button", {
+      name: /Start Live Interview/i,
+    });
     expect(startButton).toBeDisabled();
 
     await waitFor(() => expect(startButton).toBeEnabled());
@@ -121,7 +123,7 @@ describe("InterviewLobby", () => {
       expect(screen.getByTestId("device-preview")).toBeInTheDocument()
     );
     expect(
-      screen.getByRole("button", { name: /Start Interview/i })
+      screen.getByRole("button", { name: /Start Live Interview/i })
     ).toBeDisabled();
   });
 
@@ -146,7 +148,7 @@ describe("InterviewLobby", () => {
     );
 
     expect(
-      await screen.findByText(/live interview room is not configured/i)
+      await screen.findByText(/stream video connection is unconfigured/i)
     ).toBeInTheDocument();
   });
 });

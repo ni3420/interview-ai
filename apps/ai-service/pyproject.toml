@@ -42,6 +42,10 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
+# Import tests as isolated modules. Without this, tests/unit and
+# tests/integration both define `test_vector_store`, and pytest refuses to
+# collect the second file ("import file mismatch").
+addopts = "--import-mode=importlib"
 markers = [
     "integration: requires real local services (Qdrant and Ollama)",
     "live: opt-in checks that call the configured live model",
@@ -50,7 +54,12 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-select = ["E", "F", "I", "W", "UP", "B", "C4", "PT", "TCH", "SIM", "PIE", "RSE", "RET", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "NPY", "RUF", "ASYNC", "FLY", "TID", "LOG", "DTZ", "EXE", "ISC", "ICN", "PERF", "AIR", "QTY", "TD", "TT", "N8", "INT", "IF", "FA", "C90", "D", "S"]
+
+[tool.ruff.lint]
+# `QTY`, `TT` and `IF` were unknown selectors and made ruff refuse to load.
+# Quotes (Q) is the real flake8-quotes family; print (T20) and type-checking
+# (TCH) are already covered by TCH and the project's logging rules.
+select = ["E", "F", "I", "W", "UP", "B", "C4", "PT", "TCH", "SIM", "PIE", "RSE", "RET", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "NPY", "RUF", "ASYNC", "FLY", "TID", "LOG", "DTZ", "EXE", "ISC", "ICN", "PERF", "AIR", "Q", "TD", "N8", "INT", "FA", "C90", "D", "S"]
 ignore = ["E501"]
 
 [tool.ruff.format]

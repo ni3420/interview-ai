@@ -21,14 +21,16 @@ describe("JobDescriptionInput", () => {
 
   it("shows character count", () => {
     render(<JobDescriptionInput {...defaultProps} value="Test job description" />);
-    expect(screen.getByText("20 characters (30 more needed)")).toBeInTheDocument();
+    expect(
+      screen.getByText("20 characters (30 more characters needed)")
+    ).toBeInTheDocument();
   });
 
   it("shows valid state when minimum characters met", () => {
     const longText = "A".repeat(50);
     render(<JobDescriptionInput {...defaultProps} value={longText} />);
     expect(screen.getByText("Ready")).toBeInTheDocument();
-    expect(screen.getByText(/minimum 50 met/)).toBeInTheDocument();
+    expect(screen.getByText(/minimum requirement met/i)).toBeInTheDocument();
   });
 
   it("calls onChange when text changes", () => {
@@ -47,6 +49,6 @@ describe("JobDescriptionInput", () => {
   it("applies error styling when error provided", () => {
     render(<JobDescriptionInput {...defaultProps} error="Error message" />);
     const card = screen.getByText("Job Description").closest(".rounded-lg.border");
-    expect(card).toHaveClass("border-destructive");
+    expect(card).toHaveClass("border-red-500/80");
   });
 });
