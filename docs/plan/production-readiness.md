@@ -66,7 +66,9 @@ passing item is the documentation drift script. Everything else fails:
 6. **The report is not fully evidence-based.** Coverage can be short (G-20), there is no
    quote per score (`convex/schema.ts:68-72`), and the overall score is whatever the model
    returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
-7. **Little is observed.** No `Sentry.init` (G-02), no latency fields (G-19). CI now exists
+7. **Little is observed.** Error monitoring is opt-in through
+   `src/instrumentation.ts` and `instrumentation-client.ts` (G-02) but has not been
+   exercised against a real DSN; latency fields are still missing (G-19). CI now exists
    (G-05) and the client ships baseline security headers from `next.config.ts` (G-42; a
    full origin-scoped CSP is still deferred). Per-user fixed-window budgets now cover
    interview creation, resume/report enqueueing and agent dispatch (G-06).
@@ -137,7 +139,7 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Report retry | working | explicit Retry after failure (`report/page.tsx:146`) |
 | Stuck-job recovery | working | 10-minute cron fails stale `reportJobs`/`resumes` (`convex/maintenance.ts`); operator requeue CLI in `worker/src/requeue.ts` |
 | Billing | **missing** | empty Stripe dirs, no plan fields (G-03) |
-| Error monitoring | **missing** | no `Sentry.init` (G-02) |
+| Error monitoring | working (opt-in) | `src/instrumentation.ts` + `instrumentation-client.ts` init Sentry/GlitchTip only when `NEXT_PUBLIC_SENTRY_DSN` is set; replays/tracing/PII off (G-02). Delivery to a real project is UNVERIFIED |
 | CI | working | `.github/workflows/ci.yml` runs client tests/typecheck/build + Convex typecheck, worker tests/typecheck/build, and pytest (G-05); lint is not gated (see G-47 row below) |
 | Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); baseline security headers (HSTS, nosniff, frame-deny, referrer, permissions, minimal CSP) ship from `client/next.config.ts` (G-42); a full origin-scoped CSP is still deferred |
 
@@ -411,7 +413,8 @@ UI shows the quote and the formula. Effort: M. Depends on Phase 2 (durable answe
 
 ### Phase 4 — observability, CI, cost (Medium)
 
-Sentry init and `instrumentation.ts` (G-02); latency fields (G-19); CI for Q1–Q4, Q10, Q11,
+Sentry init through `instrumentation.ts` and `instrumentation-client.ts` (G-02 — done
+2026-10-31, opt-in); latency fields (G-19); CI for Q1–Q4, Q10, Q11,
 Q13 (G-05 — done 2026-10-31); fix the 6 red client tests (G-25 — done 2026-10-31); fix ruff
 config (G-47 — config loads 2026-10-31, ~790 findings remain as lint debt); model-call cost
 events. Acceptance: an induced error produces exactly one event; Q9 has data for every F9

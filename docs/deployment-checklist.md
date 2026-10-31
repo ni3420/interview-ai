@@ -68,7 +68,7 @@ to start without it.
 | `STREAM_API_KEY`, `STREAM_API_SECRET` | yes for live interviews | `/api/stream/token`; server-only |
 | `RESUME_FETCH_HOST` | conditional | only when the worker/AI service must rewrite a loopback storage URL (container dev). Leave unset when Convex is publicly reachable |
 | `CONVEX_SITE_URL` | optional | informational; no client code reads it today |
-| `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_AUTH_TOKEN` | inert today | there is no `instrumentation.ts` and no `withSentryConfig`; see G-02 |
+| `NEXT_PUBLIC_SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_ENVIRONMENT` | optional | error monitoring is opt-in: with no DSN `Sentry.init` is never called. `SENTRY_AUTH_TOKEN` is unused (no source-map upload) |
 | Stripe vars, `CLERK_WEBHOOK_SECRET`, `ADMIN_CLERK_IDS` | **do not configure** | documented in `.env.example` but no route reads them; `app/api/stripe/*` and `app/admin/billing` are empty directories |
 
 ### Convex deployment
@@ -185,6 +185,13 @@ a pass is the observed result, not the intention.
 - [ ] After signing in, camera and microphone prompts still work in the lobby — the
       Permissions-Policy must not block the core interview flow.
 
+### Error monitoring
+- [ ] With `NEXT_PUBLIC_SENTRY_DSN` unset, the app starts and the browser makes no
+      request to a `sentry`/`ingest` host (network tab).
+- [ ] With the DSN set, force one server error and confirm exactly one event arrives with
+      the expected `environment` (`NEXT_PUBLIC_SENTRY_ENVIRONMENT` or `NODE_ENV`).
+- [ ] Confirm the event carries no transcript, resume text, or uploaded file content.
+
 ### Interview create + quota
 - [ ] Create an interview → row appears; opening it shows the lobby.
 - [ ] Creating an 11th interview in one hour returns the quota message
@@ -288,7 +295,7 @@ These are not checklist steps; they are honest gates that remain open in this tr
 |---|---|---|
 | G-42 security headers | **baseline implemented 2026-10-31**: HSTS, nosniff, frame-deny, referrer, permissions policy, minimal CSP in `client/next.config.ts`; a full origin-scoped CSP (Clerk/Convex/Stream/Sentry hosts) is still deferred | no for launch review; yes for the CSP follow-up |
 | G-05 CI | **added 2026-10-31**: `.github/workflows/ci.yml` runs the green gates (client tests/typecheck/build + Convex typecheck, worker tests/build, pytest); lint is not gated because of the ~790 findings | no; branch protection still needs manual setup |
-| G-02 error monitoring | no `instrumentation.ts`; `lib/glitchtip.ts` calls Sentry APIs with no `Sentry.init`, so DSN envs are inert | yes |
+| G-02 error monitoring | **implemented 2026-10-31**: server and browser instrumentation init only when a DSN is configured; replays, tracing and PII are off. Delivery to a real project is UNVERIFIED (no DSN available here) | no for code; yes until a DSN is configured and one event is observed |
 | G-25 red tests | **resolved 2026-10-31**: assertions updated to the redesigned lobby and job-description copy; 250/250 client tests pass | no |
 | G-47 ruff config | **config crash fixed 2026-10-31** (invalid selectors removed, `lint` section); 790 pre-existing lint findings remain as separate debt | no for deploy; yes for a lint gate |
 | G-20 report evidence | see the issue register | yes before calling reports trustworthy |
