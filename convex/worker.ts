@@ -33,26 +33,29 @@ export const completeResumeProcessing = internalMutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const resume = args.resumeId ? await ctx.db.get(args.resumeId) : null;
+    const interview = args.interviewId ? await ctx.db.get(args.interviewId) : null;
 
-    if (args.resumeId) {
-      const resume = await ctx.db.get(args.resumeId);
-      if (resume) {
-        await ctx.db.patch(args.resumeId, { status: "ready", updatedAt: now });
-      }
+    // The queue payload pairs a resume with an interview. Only the worker can
+    // reach this mutation, but a tampered or stale payload must never write one
+    // tenant's resume text onto another tenant's interview.
+    if (resume && interview && resume.userId !== interview.userId) {
+      throw new Error("Resume does not belong to the interview owner");
     }
 
-    if (args.interviewId) {
-      const interview = await ctx.db.get(args.interviewId);
-      if (interview) {
-        await ctx.db.patch(args.interviewId, {
-          resumeText: args.resumeText,
-          plan: args.plan,
-          // A successful retry must clear a failure recorded by an earlier
-          // terminal attempt, otherwise the interview stays "failed" forever.
-          ...(interview.status === "failed" ? { status: "setup" as const } : {}),
-          updatedAt: now,
-        });
-      }
+    if (resume) {
+      await ctx.db.patch(resume._id, { status: "ready", updatedAt: now });
+    }
+
+    if (interview) {
+      await ctx.db.patch(interview._id, {
+        resumeText: args.resumeText,
+        plan: args.plan,
+        // A successful retry must clear a failure recorded by an earlier
+        // terminal attempt, otherwise the interview stays "failed" forever.
+        ...(interview.status === "failed" ? { status: "setup" as const } : {}),
+        updatedAt: now,
+      });
     }
 
     return { success: true };

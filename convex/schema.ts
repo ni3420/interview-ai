@@ -198,6 +198,15 @@ export default defineSchema({
   // Durable status for the asynchronous report-generation job. The report
   // itself lives in `reports`; this table lets the UI observe queued,
   // processing, completed and failed without holding an HTTP request open.
+  // Fixed-window counters for costly actions. One row per user and action keeps
+  // the table small and makes each check a single-row read/write.
+  rateLimits: defineTable({
+    key: v.string(),
+    windowStart: v.number(),
+    count: v.number(),
+    updatedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   reportJobs: defineTable({
     interviewId: v.id("interviews"),
     userId: v.id("users"),

@@ -5,6 +5,7 @@ export const createMockCtx = () => {
     insert: vi.fn(),
     get: vi.fn(),
     patch: vi.fn(),
+    delete: vi.fn(),
     query: vi.fn().mockReturnThis(),
     withIndex: vi.fn().mockReturnThis(),
     filter: vi.fn().mockReturnThis(),

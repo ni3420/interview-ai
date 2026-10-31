@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { getAuthUserId, requireAuthUserId, upsertUserFromIdentity } from "./auth";
+import { consumeQuota } from "./rateLimits";
 
 export const createInterview = mutation({
   args: {
@@ -14,6 +15,19 @@ export const createInterview = mutation({
     // landed yet gets it here instead of an interview written without an owner.
     const userId = await upsertUserFromIdentity(ctx);
     const now = Date.now();
+
+    // A resume id is client input: never attach one the caller does not own.
+    if (args.resumeId) {
+      const resume = await ctx.db.get(args.resumeId);
+      if (!resume || resume.userId !== userId) throw new Error("Not found");
+    }
+
+    // Interviews are created directly from the browser, so the budget is
+    // enforced here rather than in a route handler.
+    const quota = await consumeQuota(ctx, userId, "interview_create");
+    if (!quota.allowed) {
+      throw new Error("Too many interviews created. Please try again later.");
+    }
 
     return await ctx.db.insert("interviews", {
       userId,

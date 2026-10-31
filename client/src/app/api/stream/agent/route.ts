@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
 import { signServiceRequest } from "@/lib/service-auth";
+import { enforceQuota } from "@/lib/server/quota";
 
 // Convex and the AI service client need the Node.js runtime.
 export const runtime = "nodejs";
@@ -10,9 +11,8 @@ export const runtime = "nodejs";
 const CALL_TYPE = "default";
 
 // Server-only configuration. The signing secret never reaches the browser.
-// Note we use AI_SERVICE_URL (not NEXT_PUBLIC_AI_SERVICE_URL): the public var
-// is the browser's escape hatch in `lib/ai-service.ts`, and setting it would
-// let the browser call the AI service directly, bypassing this signed route.
+// Use AI_SERVICE_URL (not NEXT_PUBLIC_AI_SERVICE_URL): a public service URL
+// would let the browser call the AI service directly, bypassing this route.
 const AI_SERVICE_URL = (process.env.AI_SERVICE_URL ?? "http://localhost:8000").replace(
   /\/$/,
   ""
@@ -78,6 +78,10 @@ export async function POST(request: NextRequest) {
   if (!interview) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Starting a realtime interviewer opens a paid Gemini Live session.
+  const denied = await enforceQuota(convex, "stream_agent");
+  if (denied) return denied;
 
   const endpoint = `${AI_SERVICE_URL}/v1/realtime/join-call`;
   const body = JSON.stringify({

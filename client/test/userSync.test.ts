@@ -401,11 +401,15 @@ describe("Convex createInterview ownership (G-50)", () => {
     const result = await createInterview(ctx, { jobDescription: "Test JD" });
 
     expect(result).toBe("interview-1");
-    expect(ctx.db.insert.mock.calls.map(([table]) => table)).toEqual([
-      "users",
-      "interviews",
-    ]);
-    expect(ctx.db.insert.mock.calls[1]?.[1]).toEqual(
+    // Quota counters share the insert mock; only ownership rows are asserted.
+    expect(
+      ctx.db.insert.mock.calls
+        .map(([table]) => table)
+        .filter((table) => table !== "rateLimits")
+    ).toEqual(["users", "interviews"]);
+    expect(
+      ctx.db.insert.mock.calls.find(([table]) => table === "interviews")?.[1]
+    ).toEqual(
       expect.objectContaining({ userId: "users-new", jobDescription: "Test JD" })
     );
   });

@@ -32,6 +32,17 @@ export const saveResume = mutation({
       throw new Error("Invalid file size.");
     }
 
+    // The client reports the size and type; the stored object is authoritative.
+    // Without this, a caller could claim "1 byte / application/pdf" for any file.
+    const stored = await ctx.storage.getMetadata(args.storageId);
+    if (!stored) throw new Error("Upload not found.");
+    if (stored.size !== args.size || stored.size > MAX_RESUME_BYTES) {
+      throw new Error("Invalid file size.");
+    }
+    if (stored.contentType && stored.contentType !== RESUME_CONTENT_TYPE) {
+      throw new Error("Unsupported file type. Only PDF resumes are allowed.");
+    }
+
     // Keep a single active resume per user: remove any previously stored file.
     const existing = await ctx.db
       .query("resumes")

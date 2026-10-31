@@ -1,17 +1,15 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { authorizeWorkerRequest } from "./_lib/workerAuth";
 
-// Machine-to-machine endpoint used by the resume-processing worker. It is
-// authenticated with a shared service key (never exposed to browsers) so only
-// the worker can move resume state and persist interview plans.
+// Machine-to-machine endpoints used by the resume and report workers. They are
+// authenticated with a timestamped HMAC (never exposed to browsers) so only
+// the worker can move resume state, read report context, and persist reports.
 const http = httpRouter();
 
-function isAuthorizedWorker(request: Request): boolean {
-  const configured = process.env.WORKER_SERVICE_KEY;
-  if (!configured) return false;
-  const provided = request.headers.get("X-Worker-Key");
-  return typeof provided === "string" && provided.length > 0 && provided === configured;
+function isAuthorizedWorker(request: Request): Promise<boolean> {
+  return authorizeWorkerRequest(request, process.env.WORKER_SERVICE_KEY);
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -44,7 +42,7 @@ http.route({
   path: "/worker/resume-complete",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    if (!isAuthorizedWorker(request)) {
+    if (!(await isAuthorizedWorker(request))) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -84,7 +82,7 @@ http.route({
   path: "/worker/resume-failed",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    if (!isAuthorizedWorker(request)) {
+    if (!(await isAuthorizedWorker(request))) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -114,7 +112,7 @@ http.route({
   path: "/worker/report-context",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    if (!isAuthorizedWorker(request)) {
+    if (!(await isAuthorizedWorker(request))) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -147,7 +145,7 @@ http.route({
   path: "/worker/report-start",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    if (!isAuthorizedWorker(request)) {
+    if (!(await isAuthorizedWorker(request))) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -182,7 +180,7 @@ http.route({
   path: "/worker/report-complete",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    if (!isAuthorizedWorker(request)) {
+    if (!(await isAuthorizedWorker(request))) {
       return new Response("Unauthorized", { status: 401 });
     }
 
@@ -260,7 +258,7 @@ http.route({
   path: "/worker/report-failed",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    if (!isAuthorizedWorker(request)) {
+    if (!(await isAuthorizedWorker(request))) {
       return new Response("Unauthorized", { status: 401 });
     }
 

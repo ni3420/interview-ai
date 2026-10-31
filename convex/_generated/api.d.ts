@@ -8,10 +8,12 @@
  * @module
  */
 
+import type * as _lib_workerAuth from "../_lib/workerAuth.js";
 import type * as answers from "../answers.js";
 import type * as auth from "../auth.js";
 import type * as http from "../http.js";
 import type * as interviews from "../interviews.js";
+import type * as rateLimits from "../rateLimits.js";
 import type * as reports from "../reports.js";
 import type * as resume from "../resume.js";
 import type * as transcriptText from "../transcriptText.js";
@@ -25,10 +27,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  "_lib/workerAuth": typeof _lib_workerAuth;
   answers: typeof answers;
   auth: typeof auth;
   http: typeof http;
   interviews: typeof interviews;
+  rateLimits: typeof rateLimits;
   reports: typeof reports;
   resume: typeof resume;
   transcriptText: typeof transcriptText;

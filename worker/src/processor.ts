@@ -1,6 +1,6 @@
 import type { Job } from "bullmq";
 import { config } from "./config";
-import { postJson, postSignedJson } from "./http";
+import { postSignedJson } from "./http";
 import { resumeJobSchema, type ResumeJob } from "./job";
 import { logEvent, logStage, queueWaitMs } from "./log";
 
@@ -94,14 +94,14 @@ export async function reportTerminalFailure(
   }
 
   try {
-    await postJson<{ success: boolean }>(
+    await postSignedJson<{ success: boolean }>(
       `${config.convexSiteUrl}/worker/resume-failed`,
       {
         resumeId: payload.data.resumeId,
         interviewId: payload.data.interviewId,
         error: error instanceof Error ? error.message : String(error),
       },
-      { "X-Worker-Key": config.workerServiceKey },
+      config.workerServiceKey,
       10_000
     );
   } catch (reportError) {
@@ -202,7 +202,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
       );
     } else {
       startedAt = performance.now();
-      await postJson<{ success: boolean }>(
+      await postSignedJson<{ success: boolean }>(
         `${config.convexSiteUrl}/worker/resume-complete`,
         {
           resumeId: payload.resumeId,
@@ -214,7 +214,7 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
             focusAreas: plan.focus_areas,
           },
         },
-        { "X-Worker-Key": config.workerServiceKey }
+        config.workerServiceKey
       );
       logStage("worker.resume.persist", startedAt, { jobId });
     }

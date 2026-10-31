@@ -66,8 +66,9 @@ passing item is the documentation drift script. Everything else fails:
 6. **The report is not fully evidence-based.** Coverage can be short (G-20), there is no
    quote per score (`convex/schema.ts:68-72`), and the overall score is whatever the model
    returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
-7. **Nothing is observed.** No `Sentry.init` (G-02), no latency fields (G-19), no CI
-   (G-05), no rate limits (G-06), no security headers (G-42).
+7. **Little is observed.** No `Sentry.init` (G-02), no latency fields (G-19), no CI
+   (G-05), no security headers (G-42). Per-user fixed-window budgets now cover
+   interview creation, resume/report enqueueing and agent dispatch (G-06).
 
 **What is strongest and should not be rewritten.** The queue boundaries, the report-job
 state table, the worker HTTP contract, the device-preview lobby (permission handling,
@@ -136,7 +137,7 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Billing | **missing** | empty Stripe dirs, no plan fields (G-03) |
 | Error monitoring | **missing** | no `Sentry.init` (G-02) |
 | CI | **missing** | no `.github/` (G-05) |
-| Rate limiting / headers | **missing** | none (G-06, G-42) |
+| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); security headers still missing (G-42) |
 
 ---
 
@@ -306,7 +307,7 @@ retry that succeeds clears the error state, and no retry can duplicate a visible
 |---|---|---|
 | Identity | **critical** | G-01: identity accepted from the caller |
 | Service auth | **high** | G-22 default key, `!=` compare; G-38 worker key `===` |
-| Authorization | partial | Convex ownership checks exist for reads; G-41 lacks `resumeId` ownership in `createInterview` |
+| Authorization | improved | G-41 fixed: `createInterview` rejects a `resumeId` the caller does not own; cross-tenant regression tests cover the Convex reads/writes and the Qdrant filter. Storage-level ownership of a raw `storageId` remains unverifiable |
 | Route protection | partial | G-21 landing blocked, G-30 `/reports` client-guarded |
 | Upload validation | **high** | G-24; no malware scan (out of scope until storage is public-facing) |
 | Injection / XSS | no finding | React escaping; Convex validators on writes; no `dangerouslySetInnerHTML` found |

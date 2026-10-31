@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
 import { buildReportJob, getReportQueue } from "@/lib/report-queue";
+import { enforceQuota } from "@/lib/server/quota";
 
 // Convex and the queue client need the Node.js runtime.
 export const runtime = "nodejs";
@@ -102,6 +103,21 @@ export async function POST(request: NextRequest) {
       { status: state.status, version: state.version },
       { status: 202 }
     );
+  }
+
+  // Only an actual evaluation costs provider time, so the budget is charged
+  // after the "already queued/completed" short-circuits above.
+  const denied = await enforceQuota(convex, "report_generate");
+  if (denied) {
+    // `requestReport` already wrote a queued row; clear it so the UI does not
+    // wait on a job this request is no longer allowed to enqueue.
+    await convex
+      .mutation(api.reports.markReportJobFailed, {
+        interviewId,
+        error: "Rate limit exceeded",
+      })
+      .catch(() => {});
+    return denied;
   }
 
   try {

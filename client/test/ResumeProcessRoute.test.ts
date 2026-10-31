@@ -71,7 +71,13 @@ beforeEach(() => {
     getToken: vi.fn().mockResolvedValue("convex-token"),
   });
   mocks.query.mockResolvedValue(context);
-  mocks.mutation.mockResolvedValue({ success: true });
+  // The quota mutation carries `action`; every other mutation is a status write.
+  mocks.mutation.mockImplementation(
+    async (_ref: unknown, args: Record<string, unknown>) =>
+      args && "action" in args
+        ? { allowed: true, remaining: 5 }
+        : { success: true }
+  );
   mocks.queueAdd.mockResolvedValue({ id: "resume:resume-1" });
   mocks.queueGetJob.mockResolvedValue(null);
   mocks.queueRemove.mockResolvedValue(undefined);
@@ -107,13 +113,27 @@ describe("POST /api/resume/process", () => {
     expect(mocks.queueAdd).not.toHaveBeenCalled();
   });
 
+  it("returns 429 without starting or enqueueing when the budget is spent", async () => {
+    mocks.mutation.mockImplementationOnce(async () => ({
+      allowed: false,
+      retryAfterMs: 30_000,
+    }));
+
+    const response = await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("30");
+    expect(mocks.mutation).toHaveBeenCalledTimes(1);
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
+  });
+
   it("marks the resume processing and enqueues a stable job", async () => {
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({ status: "processing" });
 
-    expect(mocks.mutation).toHaveBeenCalledTimes(1);
+    expect(mocks.mutation).toHaveBeenCalledTimes(2);
     expect(mocks.mutation).toHaveBeenCalledWith(expect.anything(), {
       resumeId: "resume-1",
       status: "processing",

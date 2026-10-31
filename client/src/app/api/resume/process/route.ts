@@ -3,6 +3,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
 import { buildResumeJob, getResumeQueue } from "@/lib/resume-queue";
+import { enforceQuota } from "@/lib/server/quota";
 
 // Convex and the queue client need the Node.js runtime.
 export const runtime = "nodejs";
@@ -68,6 +69,11 @@ export async function POST(request: NextRequest) {
   if (!context) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Charge the budget before flipping the resume to "processing", so a denied
+  // request leaves no half-started state behind.
+  const denied = await enforceQuota(convex, "resume_process");
+  if (denied) return denied;
 
   await convex.mutation(api.resume.markResumeStatus, {
     resumeId: context.resumeId,

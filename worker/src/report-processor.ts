@@ -1,7 +1,7 @@
 import { UnrecoverableError, type Job } from "bullmq";
 import { z } from "zod";
 import { config } from "./config";
-import { HttpError, postJson, postSignedJson } from "./http";
+import { HttpError, postSignedJson } from "./http";
 import { reportJobSchema } from "./job";
 import { logEvent, logStage, queueWaitMs } from "./log";
 import { isTerminalFailure } from "./processor";
@@ -448,7 +448,6 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
   }
 
   const payload = parsedPayload.data;
-  const workerHeaders = { "X-Worker-Key": config.workerServiceKey };
   const jobId = job.id;
   const attempt = Math.max(job.attemptsStarted, 1);
 
@@ -466,23 +465,23 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
     await job.updateProgress(5);
 
     let startedAt = performance.now();
-    await postJson<{ success: boolean }>(
+    await postSignedJson<{ success: boolean }>(
       `${config.convexSiteUrl}/worker/report-start`,
       {
         interviewId: payload.interviewId,
         version: payload.version,
         attempt,
       },
-      workerHeaders,
+      config.workerServiceKey,
       15_000
     );
     logStage("worker.report.start", startedAt, { jobId });
 
     startedAt = performance.now();
-    const rawContext = await postJson<unknown>(
+    const rawContext = await postSignedJson<unknown>(
       `${config.convexSiteUrl}/worker/report-context`,
       { interviewId: payload.interviewId },
-      workerHeaders,
+      config.workerServiceKey,
       15_000
     );
     logStage("worker.report.context", startedAt, { jobId });
@@ -510,14 +509,17 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
     await job.updateProgress(85);
 
     startedAt = performance.now();
-    const persisted = await postJson<{ success: boolean; stale?: boolean }>(
+    const persisted = await postSignedJson<{
+      success: boolean;
+      stale?: boolean;
+    }>(
       `${config.convexSiteUrl}/worker/report-complete`,
       {
         interviewId: payload.interviewId,
         ...toPersistedReport(report, version),
         attempt,
       },
-      workerHeaders,
+      config.workerServiceKey,
       30_000
     );
     logStage("worker.report.persist", startedAt, { jobId });
@@ -573,7 +575,7 @@ export async function reportEvaluationTerminalFailure(
         : "report_generation_failed";
 
   try {
-    await postJson<{ success: boolean }>(
+    await postSignedJson<{ success: boolean }>(
       `${config.convexSiteUrl}/worker/report-failed`,
       {
         interviewId: payload.data.interviewId,
@@ -581,7 +583,7 @@ export async function reportEvaluationTerminalFailure(
         errorCode,
         error: REPORT_ERROR_MESSAGES[errorCode] ?? "Report generation failed.",
       },
-      { "X-Worker-Key": config.workerServiceKey },
+      config.workerServiceKey,
       10_000
     );
   } catch (reportError) {

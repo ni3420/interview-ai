@@ -60,7 +60,13 @@ beforeEach(() => {
     userId: "clerk-user-1",
     getToken: vi.fn().mockResolvedValue("convex-token"),
   });
-  mocks.mutation.mockResolvedValue({ status: "queued", shouldEnqueue: true });
+  // The quota mutation carries `action`; every other mutation is a job write.
+  mocks.mutation.mockImplementation(
+    async (_ref: unknown, args: Record<string, unknown>) =>
+      args && "action" in args
+        ? { allowed: true, remaining: 5 }
+        : { status: "queued", shouldEnqueue: true }
+  );
   mocks.queueAdd.mockResolvedValue({ id: "report-interview-1" });
   mocks.queueGetJob.mockResolvedValue(null);
   mocks.queueRemove.mockResolvedValue(undefined);
@@ -141,7 +147,7 @@ describe("POST /api/report/generate", () => {
 
     expect(response.status).toBe(202);
     await expect(response.json()).resolves.toEqual({ status: "queued" });
-    expect(mocks.mutation).toHaveBeenCalledTimes(1);
+    expect(mocks.mutation).toHaveBeenCalledTimes(2);
     expect(mocks.queueAdd).toHaveBeenCalledWith(
       "evaluate-interview",
       { interviewId: "interview-1", version: 1 },
@@ -182,10 +188,33 @@ describe("POST /api/report/generate", () => {
     expect(mocks.queueAdd).toHaveBeenCalledOnce();
   });
 
-  it("marks the job failed when enqueueing fails", async () => {
+  it("returns 429 without enqueueing when the budget is spent", async () => {
     mocks.mutation
-      .mockResolvedValueOnce({ status: "queued", shouldEnqueue: true })
-      .mockResolvedValueOnce({ success: true });
+      .mockImplementationOnce(async () => ({
+        status: "queued",
+        shouldEnqueue: true,
+      }))
+      .mockImplementationOnce(async () => ({
+        allowed: false,
+        retryAfterMs: 2_000,
+      }));
+
+    const response = await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("2");
+    expect(mocks.mutation).toHaveBeenCalledWith(expect.anything(), {
+      interviewId: "interview-1",
+      error: "Rate limit exceeded",
+    });
+    expect(mocks.queueAdd).not.toHaveBeenCalled();
+  });
+
+  it("marks the job failed when enqueueing fails", async () => {
+    mocks.mutation.mockResolvedValueOnce({
+      status: "queued",
+      shouldEnqueue: true,
+    });
     mocks.queueAdd.mockRejectedValueOnce(new Error("redis down"));
 
     const response = await POST(jsonRequest({ interviewId: "interview-1" }));

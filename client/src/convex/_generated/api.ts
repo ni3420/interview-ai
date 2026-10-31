@@ -36,6 +36,9 @@ export const api = {
     markReportJobFailed: asMutationRef("reports:markReportJobFailed"),
     getUserReports: asQueryRef("reports:getUserReports"),
   },
+  rateLimits: {
+    consume: asMutationRef("rateLimits:consume"),
+  },
   resume: {
     generateUploadUrl: asMutationRef("resume:generateUploadUrl"),
     saveResume: asMutationRef("resume:saveResume"),

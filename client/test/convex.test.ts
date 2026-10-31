@@ -52,6 +52,8 @@ const getProcessingContext = unwrap<Promise<unknown>>(
   Resume.getProcessingContext
 );
 const markResumeStatus = unwrap<Promise<unknown>>(Resume.markResumeStatus);
+const deleteResume = unwrap<Promise<unknown>>(Resume.deleteResume);
+const saveResume = unwrap<Promise<unknown>>(Resume.saveResume);
 
 const completeResumeProcessing = unwrap<Promise<unknown>>(
   Worker.completeResumeProcessing
@@ -104,6 +106,56 @@ describe("Convex - Interviews", () => {
         "interviews",
         expect.objectContaining({ durationMinutes: 15 })
       );
+    });
+
+    it("attaches a resume owned by the caller", async () => {
+      mockCtx.db.get.mockResolvedValue({ _id: "resume-1", userId: mockAuthUserId });
+      mockCtx.db.insert.mockResolvedValue("new-interview-id");
+
+      await createInterview(mockCtx, {
+        resumeId: "resume-1",
+        jobDescription: "Test JD",
+      });
+
+      expect(mockCtx.db.get).toHaveBeenCalledWith("resume-1");
+      expect(mockCtx.db.insert).toHaveBeenCalledWith(
+        "interviews",
+        expect.objectContaining({ resumeId: "resume-1" })
+      );
+    });
+
+    it("rejects a resume owned by another user", async () => {
+      mockCtx.db.get.mockResolvedValue({ _id: "resume-1", userId: "other-user" });
+
+      await expect(
+        createInterview(mockCtx, { resumeId: "resume-1", jobDescription: "Test JD" })
+      ).rejects.toThrow("Not found");
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
+    });
+
+    it("rejects a resume that does not exist", async () => {
+      mockCtx.db.get.mockResolvedValue(null);
+
+      await expect(
+        createInterview(mockCtx, { resumeId: "missing", jobDescription: "Test JD" })
+      ).rejects.toThrow("Not found");
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
+    });
+
+    it("throws when the interview budget is exhausted", async () => {
+      mockCtx.db.query.mockReturnValue({
+        withIndex: vi.fn().mockReturnThis(),
+        unique: vi.fn().mockResolvedValue({
+          _id: "limit-1",
+          windowStart: Date.now(),
+          count: 10,
+        }),
+      });
+
+      await expect(
+        createInterview(mockCtx, { jobDescription: "Test JD" })
+      ).rejects.toThrow(/Too many interviews/);
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
     });
   });
 
@@ -188,6 +240,16 @@ describe("Convex - Interviews", () => {
         status: "in_progress",
       })).rejects.toThrow("Not found");
     });
+
+    it("throws when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValue({ ...mockInterview, userId: "other-user" });
+
+      await expect(updateInterviewStatus(mockCtx, {
+        interviewId: "interview-1",
+        status: "completed",
+      })).rejects.toThrow("Not found");
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
+    });
   });
 
   describe("saveInterviewPlan", () => {
@@ -207,6 +269,16 @@ describe("Convex - Interviews", () => {
         status: "in_progress",
         startedAt: expect.any(Number),
       }));
+    });
+
+    it("throws when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValue({ ...mockInterview, userId: "other-user" });
+
+      await expect(saveInterviewPlan(mockCtx, {
+        interviewId: "interview-1",
+        plan: { questions: [] },
+      })).rejects.toThrow("Not found");
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
     });
   });
 });
@@ -270,6 +342,19 @@ describe("Convex - Answers", () => {
         followUpCount: 1,
       });
     });
+
+    it("throws when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValue({ ...mockInterview, userId: "other-user" });
+
+      await expect(saveAnswer(mockCtx, {
+        interviewId: "interview-1",
+        questionIndex: 0,
+        question: "Test question",
+        answer: "Test answer",
+        followUpCount: 0,
+      })).rejects.toThrow("Not found");
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
+    });
   });
 
   describe("getAnswers", () => {
@@ -293,6 +378,15 @@ describe("Convex - Answers", () => {
 
       expect(result).toEqual([]);
     });
+
+    it("returns empty array when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValue({ ...mockInterview, userId: "other-user" });
+
+      const result = await getAnswers(mockCtx, { interviewId: "interview-1" });
+
+      expect(result).toEqual([]);
+      expect(mockCtx.db.query).not.toHaveBeenCalled();
+    });
   });
 
   describe("incrementQuestionIndex", () => {
@@ -307,6 +401,15 @@ describe("Convex - Answers", () => {
         currentQuestionIndex: 1,
         updatedAt: expect.any(Number),
       });
+    });
+
+    it("throws when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValue({ ...mockInterview, userId: "other-user" });
+
+      await expect(
+        incrementQuestionIndex(mockCtx, { interviewId: "interview-1" })
+      ).rejects.toThrow("Not found");
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
     });
   });
 });
@@ -481,6 +584,15 @@ describe("Convex - Reports", () => {
 
       expect(result).toBeNull();
     });
+
+    it("returns null when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValue({ ...mockInterview, userId: "other-user" });
+
+      const result = await getReport(mockCtx, { interviewId: "interview-1" });
+
+      expect(result).toBeNull();
+      expect(mockCtx.db.query).not.toHaveBeenCalled();
+    });
   });
 
   describe("getUserReports", () => {
@@ -514,13 +626,17 @@ describe("Convex - Resume processing", () => {
   };
 
   let mockCtx: ReturnType<typeof createMockCtx> & {
-    storage: { getUrl: ReturnType<typeof vi.fn> };
+    storage: {
+      getUrl: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      getMetadata: ReturnType<typeof vi.fn>;
+    };
   };
 
   beforeEach(() => {
     mockCtx = {
       ...createMockCtx(),
-      storage: { getUrl: vi.fn() },
+      storage: { getUrl: vi.fn(), delete: vi.fn(), getMetadata: vi.fn() },
     };
     vi.clearAllMocks();
     mockCtx.storage.getUrl.mockResolvedValue("https://files.example/resume-1");
@@ -598,6 +714,82 @@ describe("Convex - Resume processing", () => {
       await expect(
         markResumeStatus(mockCtx, { resumeId: "resume-1", status: "ready" })
       ).rejects.toThrow("Not found");
+    });
+  });
+
+  describe("deleteResume", () => {
+    it("deletes the resume and its stored file for the owner", async () => {
+      mockCtx.db.get.mockResolvedValueOnce(mockResume);
+
+      const result = await deleteResume(mockCtx, { resumeId: "resume-1" });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCtx.storage.delete).toHaveBeenCalledWith("storage-1");
+      expect(mockCtx.db.delete).toHaveBeenCalledWith("resume-1");
+    });
+
+    it("throws when the caller does not own the resume", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...mockResume,
+        userId: "other-user",
+      });
+
+      await expect(
+        deleteResume(mockCtx, { resumeId: "resume-1" })
+      ).rejects.toThrow("Not found");
+      expect(mockCtx.storage.delete).not.toHaveBeenCalled();
+      expect(mockCtx.db.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("saveResume", () => {
+    const file = {
+      fileName: "resume.pdf",
+      contentType: "application/pdf",
+      size: 1234,
+    };
+
+    it("rejects a declared size that does not match the stored object", async () => {
+      mockCtx.storage.getMetadata.mockResolvedValue({
+        size: 2_000_000,
+        contentType: "application/pdf",
+      });
+
+      await expect(
+        saveResume(mockCtx, { storageId: "storage-1", ...file })
+      ).rejects.toThrow("Invalid file size.");
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
+    });
+
+    it("rejects a stored content type that is not a PDF", async () => {
+      mockCtx.storage.getMetadata.mockResolvedValue({
+        size: 1234,
+        contentType: "image/png",
+      });
+
+      await expect(
+        saveResume(mockCtx, { storageId: "storage-1", ...file })
+      ).rejects.toThrow("Unsupported file type");
+    });
+
+    it("stores metadata when the upload matches the declared values", async () => {
+      mockCtx.storage.getMetadata.mockResolvedValue({
+        size: 1234,
+        contentType: "application/pdf",
+      });
+      mockCtx.db.collect.mockResolvedValue([]);
+      mockCtx.db.insert.mockResolvedValue("resume-1");
+
+      const result = await saveResume(mockCtx, {
+        storageId: "storage-1",
+        ...file,
+      });
+
+      expect(result).toBe("resume-1");
+      expect(mockCtx.db.insert).toHaveBeenCalledWith(
+        "resumes",
+        expect.objectContaining({ userId: mockAuthUserId, size: 1234 })
+      );
     });
   });
 });
@@ -687,6 +879,23 @@ describe("Convex - Worker persistence", () => {
         ([id]) => id === "interview-1"
       );
       expect(interviewPatch?.[1]).not.toHaveProperty("status");
+    });
+
+    it("rejects a resume paired with another user's interview", async () => {
+      mockCtx.db.get
+        .mockResolvedValueOnce(resume)
+        .mockResolvedValueOnce({ ...mockInterview, userId: "other-user" });
+
+      await expect(
+        completeResumeProcessing(mockCtx, {
+          resumeId: "resume-1",
+          interviewId: "interview-1",
+          resumeText: "text",
+          chunkCount: 0,
+          plan: { questions: [], focusAreas: [] },
+        })
+      ).rejects.toThrow("does not belong");
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
     });
 
     it("is a no-op when the referenced documents no longer exist", async () => {
@@ -989,6 +1198,21 @@ describe("Convex - Report jobs", () => {
         "report-job-1",
         expect.objectContaining({ status: "failed", error: "enqueue failed" })
       );
+    });
+
+    it("throws when the caller does not own the interview", async () => {
+      mockCtx.db.get.mockResolvedValueOnce({
+        ...mockInterview,
+        userId: "other-user",
+      });
+
+      await expect(
+        markReportJobFailed(mockCtx, {
+          interviewId: "interview-1",
+          error: "enqueue failed",
+        })
+      ).rejects.toThrow("Not found");
+      expect(mockCtx.db.patch).not.toHaveBeenCalled();
     });
   });
 
