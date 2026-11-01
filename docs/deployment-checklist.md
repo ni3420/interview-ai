@@ -22,8 +22,11 @@ before continuing.
 - [ ] **The AI service refuses to start without `SERVICE_API_KEY`**, and rejects the
       development default `dev-secret-key` whenever `APP_ENV` is not `development` or
       `test` ([config.py](../apps/ai-service/app/core/config.py)).
-- [ ] **The worker refuses to start without `AI_SERVICE_API_KEY` and `WORKER_SERVICE_KEY`**
-      ([index.ts](../worker/src/index.ts)).
+- [ ] **The worker refuses to start without `AI_SERVICE_API_KEY`, `WORKER_SERVICE_KEY` or
+      `CONVEX_SITE_URL`**, and refuses a `CONVEX_SITE_URL` that is not an http(s) URL
+      ([config.ts](../worker/src/config.ts) `workerConfigProblems`,
+      [index.ts](../worker/src/index.ts)). A résumé job that cannot persist its result
+      fails instead of reporting success ([processor.ts](../worker/src/processor.ts)).
 - [ ] **Convex `/worker/*` endpoints reject unsigned calls**; the only accepted credential
       is a valid HMAC keyed by the Convex deployment env `WORKER_SERVICE_KEY`
       ([http.ts](../convex/http.ts)).
@@ -152,6 +155,9 @@ order and verify each step before the next.
 
 3. **Worker**
    - [ ] `cd worker && bun install --frozen-lockfile && bun run build`.
+   - [ ] Unset one required variable (for example `CONVEX_SITE_URL`) and start it: the
+         process exits 1 with `worker configuration is invalid; refusing to start` and a
+         `problems` list, before connecting to Redis.
    - [ ] Start with the production env; logs must show `worker ready` and
          `report worker ready`, then a `worker heartbeat` every 60 s.
    - [ ] If the old worker is draining, keep it running until queue depth is 0.
@@ -224,12 +230,17 @@ a pass is the observed result, not the intention.
       verbatim from the transcript.
 - [ ] An 11th report request within the hour returns `429` and the job is marked failed
       with the rate-limit reason (`report_generate`, limit 10/h).
-- [ ] Not a pass/fail gate today: rejecting a report whose scores do not match the
-      answers is G-20 acceptance and is **not implemented** in this tree. Track it in §9
-      and do not sign this checklist on the assumption that it runs.
+- [x] Saved-answer mode (2026-11-01): the worker rejects a report that drops a saved
+      answer, scores without a quote, or whose overall/skill scores or completion status do
+      not follow from the criteria (`validateReport`), and a superseded version stops before
+      the model call. Still open: with transcript segments present, questions come from the
+      transcript, so a question the ASR merged is not scored separately (G-20).
 
 ### Live interview
 - [ ] `/api/stream/token` returns a token for the signed-in participant.
+- [ ] A 61st token request within the hour returns `429` with `Retry-After`
+      (`stream_token`, limit 60/h). A caller who does not own the interview gets `404` and
+      is not charged.
 - [ ] Agent dispatch succeeds once; a 21st dispatch within the hour returns `429`
       (`stream_agent`, limit 20/h).
 - [ ] Captions append to the transcript; a dropped agent leaves existing answers intact.
@@ -322,7 +333,8 @@ These are not checklist steps; they are honest gates that remain open in this tr
 | G-02 error monitoring | **implemented 2026-10-31**: server and browser instrumentation init only when a DSN is configured; replays, tracing and PII are off. Delivery to a real project is UNVERIFIED (no DSN available here) | no for code; yes until a DSN is configured and one event is observed |
 | G-25 red tests | **resolved 2026-10-31**: assertions updated to the redesigned lobby and job-description copy; 250/250 client tests pass | no |
 | G-47 ruff config | **config crash fixed 2026-10-31** (invalid selectors removed, `lint` section); 790 pre-existing lint findings remain as separate debt | no for deploy; yes for a lint gate |
-| G-20 report evidence | see the issue register | yes before calling reports trustworthy |
+| G-20 report evidence | **implemented 2026-11-01** for saved-answer reports: quotes stored per question and criterion, scores derived from the rubric, worker re-verifies before persisting, page states the formula. Residual: transcript-mode question coverage when ASR merges questions | no for saved-answer mode; yes until a live transcript-mode report is checked by hand |
+| G-40 stale report contract (A-02) | **fixed 2026-11-01**: `report-start`/`report-complete` return the mutation result and the worker stops a superseded attempt before the model call; worker guard unit-tested, route covered by typecheck + a local 401 probe only | no |
 | D-01 / D-02 | consent and retention decisions undefined | yes, legal/product |
 | D-05 | Gemini in production requires a data-handling decision | yes if Gemini is used for prod inference |
 | Storage-level ownership | a raw `storageId` is not proven to belong to the caller (residual of G-41) | review before public uploads |

@@ -3,6 +3,7 @@ import { StreamClient } from "@stream-io/node-sdk";
 import { ConvexHttpClient } from "convex/browser";
 import { NextRequest, NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
+import { enforceQuota } from "@/lib/server/quota";
 
 // Stream's server SDK needs the Node.js runtime.
 export const runtime = "nodejs";
@@ -70,6 +71,10 @@ export async function POST(request: NextRequest) {
   if (!interview) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+
+  // Charged only after ownership, so a rejected request costs nobody a unit.
+  const denied = await enforceQuota(convex, "stream_token");
+  if (denied) return denied;
 
   const user = await currentUser();
   const streamUser = {

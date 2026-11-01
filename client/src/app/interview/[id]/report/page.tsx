@@ -370,6 +370,9 @@ function RubricQuestionCard({
             <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
               Rubric breakdown
             </h4>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              Question score = weighted sum of these criteria (0&ndash;10).
+            </p>
             <ul className="mt-2 divide-y divide-border rounded-md border border-border">
               {question.criteria.map((criterion) => (
                 <li
@@ -792,6 +795,16 @@ export default function InterviewReportPage() {
                 ) : (
                   <p className="text-sm font-medium text-muted-foreground">
                     No question had enough evidence to score.
+                  </p>
+                )}
+                {rubric && counts && counts.evaluated > 0 && (
+                  <p
+                    data-testid="score-formula"
+                    className="max-w-xl text-center text-xs leading-relaxed text-muted-foreground"
+                  >
+                    Overall score is the mean of the {counts.evaluated} scored{" "}
+                    {counts.evaluated === 1 ? "question" : "questions"} (0&ndash;10).
+                    Each question is scored from its rubric criteria below.
                   </p>
                 )}
                 {completion && (

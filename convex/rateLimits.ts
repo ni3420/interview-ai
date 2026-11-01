@@ -8,6 +8,7 @@ export const QUOTA_ACTIONS = [
   "resume_process",
   "report_generate",
   "stream_agent",
+  "stream_token",
 ] as const;
 
 export type QuotaAction = (typeof QUOTA_ACTIONS)[number];
@@ -23,13 +24,16 @@ export const QUOTA_POLICIES: Record<
   resume_process: { limit: 6, windowMs: 60 * MINUTE },
   report_generate: { limit: 10, windowMs: 60 * MINUTE },
   stream_agent: { limit: 20, windowMs: 60 * MINUTE },
+  // One token per room join; reloads and reconnects reuse the issued token.
+  stream_token: { limit: 60, windowMs: 60 * MINUTE },
 };
 
 export const quotaActionValidator = v.union(
   v.literal("interview_create"),
   v.literal("resume_process"),
   v.literal("report_generate"),
-  v.literal("stream_agent")
+  v.literal("stream_agent"),
+  v.literal("stream_token")
 );
 
 export type QuotaDecision =

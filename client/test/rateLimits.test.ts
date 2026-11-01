@@ -100,6 +100,21 @@ describe("Convex - rate limits", () => {
     });
   });
 
+  it("gives token minting its own window and budget", async () => {
+    mockCtx.db.query.mockReturnValue(quotaLookup(null));
+
+    const result = await consume(mockCtx, { action: "stream_token" });
+
+    expect(result).toEqual({ allowed: true, remaining: 59 });
+    expect(mockCtx.db.insert).toHaveBeenCalledWith(
+      "rateLimits",
+      expect.objectContaining({
+        key: `${mockAuthUserId}:stream_token`,
+        count: 1,
+      })
+    );
+  });
+
   it("keys the budget to the authenticated user", async () => {
     vi.mocked(requireAuthUserId).mockResolvedValueOnce(
       "other-user" as never

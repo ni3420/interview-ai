@@ -1,4 +1,4 @@
-import type { Job } from "bullmq";
+import { UnrecoverableError, type Job } from "bullmq";
 import { config } from "./config";
 import { postSignedJson } from "./http";
 import { resumeJobSchema, type ResumeJob } from "./job";
@@ -83,7 +83,12 @@ export async function reportTerminalFailure(
     return;
   }
 
-  if (!config.convexSiteUrl || !config.workerServiceKey) return;
+  if (!config.convexSiteUrl || !config.workerServiceKey) {
+    await job
+      .log("cannot report terminal failure: Convex worker configuration is missing")
+      .catch(() => undefined);
+    return;
+  }
 
   const payload = resumeJobSchema.safeParse(job.data);
   if (!payload.success) {
@@ -199,27 +204,29 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
     await job.updateProgress(90);
 
     if (!config.convexSiteUrl || !config.workerServiceKey) {
-      job.log(
-        "CONVEX_SITE_URL / WORKER_SERVICE_KEY not set; skipping result persistence"
+      // Startup already rejects this configuration. If it changes under a
+      // running worker, fail the job instead of discarding a paid result.
+      throw new UnrecoverableError(
+        "Convex worker configuration is missing; result cannot be persisted"
       );
-    } else {
-      startedAt = performance.now();
-      await postSignedJson<{ success: boolean }>(
-        `${config.convexSiteUrl}/worker/resume-complete`,
-        {
-          resumeId: payload.resumeId,
-          interviewId: payload.interviewId,
-          resumeText: processed.text,
-          chunkCount: processed.chunk_count,
-          plan: {
-            questions: plan.questions,
-            focusAreas: plan.focus_areas,
-          },
-        },
-        config.workerServiceKey
-      );
-      logStage("worker.resume.persist", startedAt, { jobId });
     }
+
+    startedAt = performance.now();
+    await postSignedJson<{ success: boolean }>(
+      `${config.convexSiteUrl}/worker/resume-complete`,
+      {
+        resumeId: payload.resumeId,
+        interviewId: payload.interviewId,
+        resumeText: processed.text,
+        chunkCount: processed.chunk_count,
+        plan: {
+          questions: plan.questions,
+          focusAreas: plan.focus_areas,
+        },
+      },
+      config.workerServiceKey
+    );
+    logStage("worker.resume.persist", startedAt, { jobId });
 
     await job.updateProgress(100);
 

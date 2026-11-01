@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { config } from "./config";
+import { config, workerConfigProblems } from "./config";
 import { processResumeJob, reportTerminalFailure } from "./processor";
 import {
   processReportJob,
@@ -19,23 +19,21 @@ function log(message: string, meta?: Record<string, unknown>): void {
   console.log(JSON.stringify({ level: "info", message, ...meta }));
 }
 
-function assertServiceKeys(): void {
-  const missing: string[] = [];
-  if (!config.aiServiceApiKey) missing.push("AI_SERVICE_API_KEY");
-  if (!config.workerServiceKey) missing.push("WORKER_SERVICE_KEY");
-  if (missing.length === 0) return;
+function assertWorkerConfig(): void {
+  const problems = workerConfigProblems();
+  if (problems.length === 0) return;
 
   console.error(
     JSON.stringify({
       level: "error",
-      message: "worker is missing required service keys; refusing to start",
-      missing,
+      message: "worker configuration is invalid; refusing to start",
+      problems,
     })
   );
   process.exit(1);
 }
 
-assertServiceKeys();
+assertWorkerConfig();
 
 const connection = createRedisConnection();
 const worker = new Worker(config.queueName, processResumeJob, {

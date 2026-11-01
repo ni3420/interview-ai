@@ -65,9 +65,13 @@ passing item is the documentation drift script. Everything else fails:
    rehydrates from stored answers and segments, and writes retry twice with a visible
    warning on failure. Remaining: candidate speech with no preceding question is still
    absent from the Q&A rows (G-17), though its raw segment reaches the report.
-6. **The report is not fully evidence-based.** Coverage can be short (G-20), there is no
-   quote per score (`convex/schema.ts:68-72`), and the overall score is whatever the model
-   returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
+6. **The report is evidence-based but coverage can still be short** (G-20, largely closed
+   2026-11-01). The AI service derives question, overall and skill scores from criterion
+   scores, stores a quote per question and per criterion, and the worker re-verifies every
+   quote, weighted mean, skill mean and completion status before persisting. The report
+   page now states the formula. Remaining: when transcript segments exist, questions come
+   from the transcript, so an answer the ASR merged into an earlier question is not scored
+   separately.
 7. **Little is observed.** Error monitoring is opt-in through
    `src/instrumentation.ts` and `instrumentation-client.ts` (G-02) but has not been
    exercised against a real DSN. Report-job latency (enqueue → start → complete) is
@@ -144,14 +148,14 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Question attribution | partial | unlabeled speech is dropped rather than frozen as `"Interview question"` (G-17); `followUpCount` always 0 |
 | End interview | partial | persists `completed` with no transition check; leave control ends it (G-23, G-49) |
 | Session expiry | **missing** | no server-owned deadline or reaper (G-37); token expires at 3600 s (G-26) |
-| Report generation | working | queue + job state + validation; partial report possible (G-20) |
-| Report evidence | **missing** | no quote field; overall score not derived (G-20) |
+| Report generation | working | queue + job state + validation; a superseded version now stops before the model call (G-40, 2026-11-01); coverage can still be short when ASR merges questions (G-20) |
+| Report evidence | working | per-question and per-criterion quotes stored; question, overall and skill scores derived in code and re-verified by the worker; the page states the formula (G-20, 2026-11-01) |
 | Report retry | working | explicit Retry after failure (`report/page.tsx:146`) |
 | Stuck-job recovery | working | 10-minute cron fails stale `reportJobs`/`resumes` (`convex/maintenance.ts`); operator requeue CLI in `worker/src/requeue.ts` |
 | Billing | **missing** | empty Stripe dirs, no plan fields (G-03) |
 | Error monitoring | working (opt-in) | `src/instrumentation.ts` + `instrumentation-client.ts` init Sentry/GlitchTip only when `NEXT_PUBLIC_SENTRY_DSN` is set; replays/tracing/PII off (G-02). Delivery to a real project is UNVERIFIED |
 | CI | working | `.github/workflows/ci.yml` runs client tests/typecheck/build + Convex typecheck, worker tests/typecheck/build, and pytest (G-05); lint is not gated (see G-47 row below) |
-| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue and agent dispatch (G-06); origin-scoped security headers (HSTS, nosniff, frame-deny, referrer, permissions, CSP with Clerk/Convex/Stream/Sentry hosts) ship from `client/next.config.ts` + `client/src/lib/csp.ts` (G-42, 2026-11-01) |
+| Rate limiting / headers | partial | fixed-window per-user budgets in `convex/rateLimits.ts` on interview creation, resume/report enqueue, agent dispatch and Stream token minting (G-06, token 2026-11-01); origin-scoped security headers (HSTS, nosniff, frame-deny, referrer, permissions, CSP with Clerk/Convex/Stream/Sentry hosts) ship from `client/next.config.ts` + `client/src/lib/csp.ts` (G-42, 2026-11-01) |
 
 ---
 
@@ -208,9 +212,9 @@ Gaps against the master prompt:
 | Requirement | As built | Gap |
 |---|---|---|
 | Structured report | overall, strengths, weaknesses, recommendations, per-question feedback | — |
-| Evidence and quotes | none stored | G-20 |
-| Score transparency | model returns `overall_score`; UI shows a ring and color only | no stated formula, no criteria (G-20) |
-| Distinguish evidence from interpretation | not represented in schema | same gap |
+| Evidence and quotes | per-question and per-criterion quotes stored, each re-checked verbatim against the answer by the AI service and the worker | closed 2026-11-01 (G-20) |
+| Score transparency | overall = mean of scored questions; question = weighted sum of six rubric criteria; both derived in code; the page states the formula and shows each criterion with its weight | closed 2026-11-01 (G-20) |
+| Distinguish evidence from interpretation | quotes, rubric comments, strengths and missing points are separate stored fields | — |
 | Failure handling | `failed` job state, explicit Retry button | retry is user-initiated only, as designed |
 | Retrieval later | `/reports` and `/interview/[id]/report` read from Convex | `/reports` is not middleware-protected (G-30) |
 
@@ -223,7 +227,7 @@ file:line evidence in [status.md](../status.md). New rows produced by this audit
 
 | ID | Priority | Finding | Rule | File |
 |---|---|---|---|---|
-| G-20 (expanded) | High | Coverage can be short; no quote per score; overall score is model-asserted instead of derived from per-answer scores | F8 | `worker/src/report-processor.ts:167`, `convex/schema.ts:68-72` |
+| G-20 (expanded) | Medium (was High) | Quotes, derived scores and the formula are closed (2026-11-01); what remains is coverage when ASR merges questions, because transcript questions replace saved answers | F8 | `apps/ai-service/app/services/report_pipeline.py:329-393` |
 | G-49 | Medium | Room has no preparing/listening/responding/reconnecting state; leave control ends the interview without confirmation | D8 | `interview-room.tsx:117` |
 
 Mapping to the master prompt's scale: Blocker = P0, High = P1, Medium = P2, cosmetic =
@@ -325,7 +329,7 @@ Failure matrix. Detection must be server-side; a toast alone is not detection.
 | Tab close | none | none | none | interview stuck `in_progress` | server deadline closes it (G-37) |
 | Token expiry | join error | none | none | reconnect fails | mint for duration + 10 min (G-26) |
 | Worker crash | BullMQ | 3× résumé, 2× report | terminal callback | job failed | kept; stale sweep + `requeue` CLI close the loop (G-19) |
-| Report partial | none | none | none | short report | reject when scores ≠ answers (G-20) |
+| Report partial | worker re-derives coverage, scores and quotes before persisting | — | — | short report when ASR merged questions | done for saved-answer mode 2026-11-01; transcript mode still reports the extracted questions (G-20) |
 | Duplicate save | upsert | — | — | — | keep; add idempotency key (W9) |
 
 Rules that must hold after Phase 2: terminal failure is reported to Convex exactly once, a
@@ -361,13 +365,13 @@ that embedded instructions are ignored. Add to Phase 2 acceptance.
 
 ## 10. Testing strategy
 
-Current inventory (measured 2026-10-28):
+Current inventory (measured 2026-11-01):
 
 | Layer | Files | Cases | State |
 |---|---|---|---|
-| Client unit/component | 19 | ~163 | 6 failing (G-25) |
-| Worker | — | 11 | passing |
-| AI service | 9 (8 unit + 1 integration) | 72 | 71 pass, 1 skip |
+| Client unit/component | 28 | 298 | passing |
+| Worker | 5 | 40 | passing |
+| AI service | 9 (8 unit + 1 integration) | 150 | 149 pass, 1 skip (2026-11-01, before Phase 5a; no Python changed) |
 | Convex | 1 file inside client | included above | no `convex/tests` |
 | End-to-end / flows | 2 specs (`client/test/e2e`) | 3 | **partial** (Q8, 2026-11-01): room-timing harness, landing page, signed-out redirect |
 | Browser (mic/camera) | 0 | 0 | **missing** |
@@ -380,7 +384,10 @@ Priority tests to add, mapped to rules:
 2. **Transitions** (T2, T14): every illegal transition rejected.
 3. **Transcript exactly-once** (T10, T20): replay a caption and reload the room.
 4. **Report coverage and evidence** (T11): N answers → N scores, each with a quote;
-   partial model output fails.
+   partial model output fails. Covered for saved-answer reports by
+   `worker/test/report-processor.test.ts` and
+   `apps/ai-service/tests/unit/test_report_evaluation.py`; the transcript-path coverage
+   case is still missing.
 5. **Upload validation** (T5, T15): wrong MIME, forged `.pdf`, 6 MB, server-side.
 6. **Dispatch failure** (T12): three failures → one failed row → Rejoin.
 7. **Session end** (T21): expiry closes the row and stops the agent; tab close does not
@@ -440,9 +447,19 @@ Phase 1 (transition table).
 
 ### Phase 3 — report correctness (High)
 
-Enforce coverage, store a quote per score, derive the overall score from per-answer scores
-with a stated formula, and render stable error codes. Acceptance: T11 and T23 pass; report
-UI shows the quote and the formula. Effort: M. Depends on Phase 2 (durable answers).
+**Done 2026-11-01 (Phase 5a):** quotes per question and criterion were already stored and
+scores were already derived in code (the register was stale); the worker now re-verifies
+quote provenance, weighted means, skill means, completion status and saved-answer coverage
+before persisting, and the report page states the overall formula. Superseded attempts stop
+before the model call (G-40/A-02).
+
+**Still open:** when transcript segments exist, questions come from the transcript, so a
+saved answer merged into an earlier question is not scored separately. Closing that needs a
+deduped merge of stored answers into transcript questions and is a separate decision.
+Acceptance so far: T11's "each score has a quote / partial output fails" is covered by the
+worker and AI-service tests; the report UI shows the quote and the formula. The
+transcript-path coverage case is still open. Effort remaining: M. Depends on Phase 2
+(durable answers).
 
 ### Phase 4 — observability, CI, cost (Medium)
 
@@ -467,8 +484,19 @@ usage and local embeddings, so the number is a lower bound for the full intervie
 
 ### Phase 5 — hardening and design (Medium)
 
-Rate limits (G-06), security headers (G-42 — origin-scoped CSP done 2026-11-01; nonce-based
-`script-src` remains open), worker config fail-closed (G-39), dead code
+**Done 2026-11-01 (Phase 5b):** worker config fail-closed (G-39). The worker validates
+`AI_SERVICE_API_KEY`, `WORKER_SERVICE_KEY` and `CONVEX_SITE_URL` (http(s) URL) plus the
+numeric settings at startup and exits 1 listing every problem; the resume pipeline now
+fails a job it cannot persist instead of logging a skip and returning success.
+Verified by unit tests and by starting the built worker with an empty environment.
+
+**Done 2026-11-01 (Phase 5c):** the Stream token route now charges a per-user
+`stream_token` budget (60/h) before minting a token, so it is no longer the last unmetered
+paid route; the charge happens after the ownership check and a failed counter lookup fails
+closed. Covered by a new route test (401/400/404/429/503/200) and a quota-window test.
+
+**Still open:** no global/org spend cap or admin override; `resume.generateUploadUrl` and
+transcript writes remain unmetered (G-06 remainder), nonce-based `script-src` (G-42), dead code
 (G-28, G-03), pagination (G-45), structured AI-service logs (G-46), design-system migration
 (G-04, G-08, G-12) with ADR 0002. Effort: M–L. Depends on Phases 0–4.
 

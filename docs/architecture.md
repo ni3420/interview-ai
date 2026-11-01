@@ -184,14 +184,18 @@ not by an id supplied by the client.
 
 ### F3b — Answer evaluation
 
-- There is no live text answer path. Persisted answers are evaluated only by the report
-  worker (F4), which posts them to `v1/interviews/evaluate` together with the résumé text
-  and job description.
+- There is no live text answer path. Persisted answers and raw transcript segments are
+  evaluated only by the report worker (F4), which posts them to `v1/interviews/report`
+  together with the résumé text and job description.
 - The AI service is not a trust boundary: identity, ownership and interview state are
   re-checked in Convex before results are attached to an interview.
-- `alignQuestionScores` maps model positions to stored `questionIndex` values and drops
-  out-of-range or duplicate positions, so a report can persist with fewer scores than
-  answers (G-20).
+- Question coverage depends on which input exists. With segments, the AI service extracts
+  interview questions from the transcript, so an answer the ASR merged into an earlier
+  question is not scored separately (remaining G-20). Without segments, each saved answer
+  becomes one question and the worker rejects a report that drops any of them.
+- The worker is the last validation boundary: quotes must be verbatim, question and overall
+  scores must follow the rubric weights, skill scores must be the criterion means, and
+  completion status must match scored coverage before anything is written.
 
 ### F4 — Report generation
 

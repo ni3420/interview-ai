@@ -162,17 +162,18 @@ http.route({
     }
 
     try {
-      await ctx.runMutation(internal.worker.startReportJob, {
+      // The mutation reports `stale` for a superseded version; the worker uses
+      // it to stop before paying for an evaluation nobody will read.
+      const result = await ctx.runMutation(internal.worker.startReportJob, {
         interviewId: interviewId as never,
         version: optionalNumber(body.version),
         attempt: optionalNumber(body.attempt),
       });
+      return jsonResponse(result);
     } catch (error) {
       console.error("worker/report-start rejected", error);
       return new Response("Invalid payload", { status: 400 });
     }
-
-    return jsonResponse({ success: true });
   }),
 });
 
@@ -224,7 +225,9 @@ http.route({
     }
 
     try {
-      await ctx.runMutation(internal.worker.completeReportJob, {
+      // A superseded attempt must be visible to the worker as stale, not as a
+      // successful persist, or it would mark a report it never wrote as done.
+      const result = await ctx.runMutation(internal.worker.completeReportJob, {
         interviewId: interviewId as never,
         overallScore,
         strengths,
@@ -245,12 +248,11 @@ http.route({
         rubricVersion:
           typeof body.rubricVersion === "string" ? body.rubricVersion : undefined,
       });
+      return jsonResponse(result);
     } catch (error) {
       console.error("worker/report-complete rejected", error);
       return new Response("Invalid payload", { status: 400 });
     }
-
-    return jsonResponse({ success: true });
   }),
 });
 

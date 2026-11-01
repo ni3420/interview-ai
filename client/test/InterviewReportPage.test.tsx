@@ -263,6 +263,7 @@ describe("InterviewReportPage", () => {
     expect(screen.getByText("Practice system design")).toBeInTheDocument();
     expect(screen.getByText("Great")).toBeInTheDocument();
     expect(screen.queryByText("Skill assessment")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("score-formula")).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -277,6 +278,12 @@ describe("InterviewReportPage", () => {
       screen.getByText(
         "Solid backend answers with room to improve trade-off discussion."
       )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/mean of the 1 scored question/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/weighted sum of these criteria/i)
     ).toBeInTheDocument();
     expect(screen.getByText("Partial evaluation")).toBeInTheDocument();
     expect(screen.getByText("Skill assessment")).toBeInTheDocument();
@@ -303,6 +310,24 @@ describe("InterviewReportPage", () => {
     expect(
       screen.getByText("Two background segments were excluded from scoring.")
     ).toBeInTheDocument();
+  });
+
+  it("omits the score formula when nothing was scored", () => {
+    state.report = {
+      ...rubricReport,
+      overallScore: null,
+      completionStatus: "insufficient_evidence" as const,
+      counts: { ...rubricReport.counts, evaluated: 0 },
+      skillScores: undefined,
+    };
+    state.job = { ...job, status: "completed" };
+
+    render(<InterviewReportPage />);
+
+    expect(
+      screen.getByText("No question had enough evidence to score.")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("score-formula")).not.toBeInTheDocument();
   });
 
   it("never shows unverified speech as a candidate answer", () => {

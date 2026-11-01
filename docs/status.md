@@ -303,6 +303,8 @@ Found during the 2026-10-28 audit; docs updated where noted:
 | Room conversational state | not registered | room shows only "Live"; leave control ends the interview | added G-49 |
 | `scripts/verify-agents.sh` | gate claims it exits 0 | **file absent**; `scripts/` is empty | flagged 2026-10-29; not recreated without approval |
 | Static build size | 2.4 MB raw (2026-10-28) | `.next/static` absent on 2026-10-29; scripted gzip measured instead (578.0 KB) | re-measured; see §Performance baseline |
+| G-20 "no quote per score, overall score is the model's" | recorded 2026-10-28 | re-read 2026-11-01: rows store per-question and per-criterion `evidence` (`convex/schema.ts:23-44`); the AI service derives question, overall and skill scores from criterion scores (`report_evaluation.py:443-457`); the worker re-verifies all of it (`report-processor.ts#validateReport`) | evidence row and plan Phase 3 corrected; UI formula added 2026-11-01 |
+| `architecture.md` F3b | "posts to `v1/interviews/evaluate`; `alignQuestionScores` drops scores" | the worker posts to `v1/interviews/report`; no `alignQuestionScores` exists (grep: 0 hits) | F3b rewritten 2026-11-01 |
 
 ## Report format
 
@@ -322,7 +324,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-03 | empty dirs under `client/src/app/api/stripe/` and `client/src/app/admin/billing` |
 | G-04 | `features/components/common/*` vs `components/ui/*`; `/reports` imports common |
 | G-05 | `.github/workflows/ci.yml` (4 jobs, no deploy) |
-| G-06 | grep `rate.?limit` in source files: 0 hits |
+| G-06 | **partially fixed 2026-11-01** — per-user fixed windows (60 min) in `convex/rateLimits.ts`: `interview_create` 10, `resume_process` 6, `report_generate` 10, `stream_agent` 20, `stream_token` 60. Enforced in `createInterview` and in all four paid Next routes via `enforceQuota`, which fails closed with 503 when the counter cannot be read. Still open: no global/org spend cap or admin override; résumé upload-URL minting (`resume.generateUploadUrl`) and transcript writes are unmetered |
 | G-07 | `convex/schema.ts:25` (`plan: v.optional(v.any())`) |
 | G-08 | `app/page.tsx`, `HeroSection.tsx`, setup, lobby, `stream-provider.tsx` |
 | G-09 | `convex/resume.ts:125-136`; `vector_store.py:109` |
@@ -335,7 +337,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-17 | **partially fixed 2026-11-01** — `transcript-recorder.ts:115` drops candidate speech with no question instead of storing an unlabeled row; the same speech still reaches the report through `transcriptSegments`, but the Q&A view loses it |
 | G-18 | `setup/page.tsx:85-94`; `stream-provider.tsx:137-138` |
 | G-19 | **fixed 2026-10-31** — `reportJobs.enqueuedAt`/`startedAt`/`completedAt`; worker `jobTiming` on terminal logs; room `turn.response` logs turn latency (live samples 5335 / 342 / 4640 ms on 2026-11-01) |
-| G-20 | `worker/src/report-processor.ts:59-91,167`; `convex/schema.ts:68-72` |
+| G-20 | **mostly fixed 2026-11-01** — `convex/schema.ts:23-44` stores per-question and per-criterion quotes; `apps/ai-service/app/services/report_evaluation.py:443-457` derives question, overall and skill scores from criterion scores; `worker/src/report-processor.ts#validateReport` re-verifies quotes, weighted means, skill means, completion status and (legacy path) answer coverage before persisting; `report/page.tsx` states the overall formula (`data-testid="score-formula"`). Remaining: with transcript segments present, questions come from the transcript, so an answer ASR merged into an earlier question is still not reported separately |
 | G-21 | `app/layout.tsx:29`; `UserSyncProvider.tsx:40-44` |
 | G-22 | `config.py:36`; `deps.py:11`; `compose.yaml:53,84`; `lib/ai-service.ts:15` |
 | G-23 | `convex/interviews.ts:51-80` |
@@ -354,8 +356,8 @@ Every debt row in AGENTS.md points at one of these.
 | G-36 | **fixed 2026-11-01** — answer and segment writes retry twice (400 ms, 1.2 s); a still-failing write raises `persistenceDegraded` and the room shows a warning banner. Unit-tested |
 | G-37 | `use-interview-timer.ts`; `runner.py:68-105`; `api/v1/realtime.py:57-61` |
 | G-38 | `convex/http.ts:14` |
-| G-39 | `worker/src/processor.ts:181-201` |
-| G-40 | `report-processor.ts:218-223`; `convex/worker.ts:219-223`; `report/page.tsx:113-116,231` |
+| G-39 | **fixed 2026-11-01** — the resume pipeline used to log "skipping result persistence" and return success when `CONVEX_SITE_URL`/`WORKER_SERVICE_KEY` were unset, discarding a paid plan. `workerConfigProblems` (`config.ts`) now requires all three service variables, an http(s) `CONVEX_SITE_URL` and positive integers for the numeric settings; `index.ts` exits 1 listing every problem before connecting to Redis, and `processor.ts` fails the job (`UnrecoverableError`) if the config disappears at run time. Unit-tested; startup refusal verified by running `dist/index.js` with an empty env |
+| G-40 | **fixed 2026-11-01 (A-02)** — `convex/http.ts` `/worker/report-start` and `/worker/report-complete` now return the mutation result, so `assertNotSuperseded` (`report-processor.ts`) stops a superseded attempt before the model call and after a refused persist. Covered by unit tests; no harness runs `httpAction` routes end to end |
 | G-41 | `convex/interviews.ts:5-27` |
 | G-42 | `client/src/lib/csp.ts`; `client/next.config.ts`; `client/test/csp.test.ts` |
 | G-43 | `convex/resume.ts:125-136`; no `deleteInterview` |

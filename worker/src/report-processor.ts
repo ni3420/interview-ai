@@ -139,6 +139,21 @@ export class ReportJobError extends Error {
   }
 }
 
+/**
+ * Stops an attempt whose version a newer request already superseded.
+ *
+ * Convex answers `stale` instead of accepting the write; evaluating anyway
+ * costs a model call whose result could never be shown.
+ */
+export function assertNotSuperseded(result: {
+  success: boolean;
+  stale?: boolean;
+}): void {
+  if (result.stale) {
+    throw new UnrecoverableError(REPORT_ERROR_MESSAGES.stale_report_job);
+  }
+}
+
 export const REPORT_ERROR_MESSAGES: Record<string, string> = {
   invalid_model_output:
     "The evaluation model returned output that did not match the rubric or transcript.",
@@ -168,9 +183,13 @@ function closeEnough(actual: number, expected: number): boolean {
  * The AI service already checked this, but the worker is the last boundary
  * before persistence: a stale or buggy deployment must not be able to store an
  * evidence quote that is not in the transcript, or a score that does not follow
- * from the rubric.
+ * from the rubric. When the job context is available it is also checked against
+ * the report, so saved answers cannot silently drop out of a report.
  */
-export function validateReport(report: ReportEvaluation): void {
+export function validateReport(
+  report: ReportEvaluation,
+  context?: ReportContext
+): void {
   if (report.score_scale !== 10) {
     throw new ReportJobError("invalid_model_output", "Unexpected score scale");
   }
@@ -196,7 +215,24 @@ export function validateReport(report: ReportEvaluation): void {
         `Question ${question.question_index} has an inconsistent score/status`
       );
     }
-    if (!evaluatedStatus) continue;
+    if (!evaluatedStatus) {
+      if (question.criteria.length > 0 || question.evidence.length > 0) {
+        throw new ReportJobError(
+          "invalid_model_output",
+          `Question ${question.question_index} has evidence without a score`
+        );
+      }
+      if (
+        question.status === "not_evaluable" &&
+        !normalizeWhitespace(question.not_evaluable_reason ?? "")
+      ) {
+        throw new ReportJobError(
+          "invalid_model_output",
+          `Question ${question.question_index} is not evaluable without a reason`
+        );
+      }
+      continue;
+    }
 
     const criterionIds = question.criteria.map((criterion) => criterion.id);
     if (
@@ -211,14 +247,53 @@ export function validateReport(report: ReportEvaluation): void {
     }
 
     const answer = normalizeWhitespace(question.answer);
+    if (!answer) {
+      throw new ReportJobError(
+        "invalid_model_output",
+        `Question ${question.question_index} is scored without an answer`
+      );
+    }
+
+    const criterionQuotes = new Set<string>();
     for (const criterion of question.criteria) {
       for (const quote of criterion.evidence) {
-        if (normalizeWhitespace(quote) && !answer.includes(normalizeWhitespace(quote))) {
+        const normalized = normalizeWhitespace(quote);
+        if (!normalized) {
+          throw new ReportJobError(
+            "invalid_model_output",
+            `Question ${question.question_index} has an empty evidence quote`
+          );
+        }
+        if (!answer.includes(normalized)) {
           throw new ReportJobError(
             "invalid_model_output",
             `Question ${question.question_index} has evidence that is not in the answer`
           );
         }
+        criterionQuotes.add(normalized);
+      }
+    }
+
+    // Every score needs at least one quote, and the question-level list must be
+    // the rubric's own quotes. Otherwise a stored quote could support a score
+    // that no criterion actually produced.
+    if (question.evidence.length === 0) {
+      throw new ReportJobError(
+        "invalid_model_output",
+        `Question ${question.question_index} is scored without a quote`
+      );
+    }
+    for (const quote of question.evidence) {
+      const normalized = normalizeWhitespace(quote);
+      if (
+        !normalized ||
+        !answer.includes(normalized) ||
+        !criterionQuotes.has(normalized)
+      ) {
+        throw new ReportJobError(
+          "invalid_model_output",
+          `Question ${question.question_index} has a quote that is not from its rubric`
+        );
       }
     }
 
@@ -241,6 +316,12 @@ export function validateReport(report: ReportEvaluation): void {
         "Overall score exists without evaluated questions"
       );
     }
+    if (report.skill_scores !== null) {
+      throw new ReportJobError(
+        "invalid_model_output",
+        "Skill scores exist without evaluated questions"
+      );
+    }
   } else {
     if (report.overall_score === null) {
       throw new ReportJobError(
@@ -256,6 +337,34 @@ export function validateReport(report: ReportEvaluation): void {
         "invalid_model_output",
         "Overall score does not match question scores"
       );
+    }
+
+    const skillScores = report.skill_scores;
+    if (skillScores === null) {
+      throw new ReportJobError(
+        "invalid_model_output",
+        "Skill scores are missing"
+      );
+    }
+    const skillCriteria = [
+      ["technical_correctness", "technical_knowledge"],
+      ["problem_solving", "problem_solving"],
+      ["communication", "communication"],
+      ["conceptual_understanding", "conceptual_understanding"],
+      ["relevance", "relevance"],
+    ] as const;
+    for (const [criterionId, skillKey] of skillCriteria) {
+      const values = scored.flatMap((question) =>
+        question.criteria
+          .filter((criterion) => criterion.id === criterionId)
+          .map((criterion) => criterion.score)
+      );
+      if (values.length !== scored.length || !closeEnough(skillScores[skillKey], mean(values))) {
+        throw new ReportJobError(
+          "invalid_model_output",
+          `Skill score ${skillKey} does not match its criteria`
+        );
+      }
     }
   }
 
@@ -274,6 +383,46 @@ export function validateReport(report: ReportEvaluation): void {
       "invalid_model_output",
       "Report counts do not match question statuses"
     );
+  }
+
+  // Completion status is derived from coverage, never asserted by the model.
+  const expectedCompletion =
+    scored.length === 0
+      ? "insufficient_evidence"
+      : counts.unanswered + counts.not_evaluable > 0
+        ? "partial"
+        : "complete";
+  if (report.completion_status !== expectedCompletion) {
+    throw new ReportJobError(
+      "invalid_model_output",
+      "Completion status does not match scored coverage"
+    );
+  }
+
+  if (!context) return;
+
+  if (counts.excluded_segments > context.segments.length) {
+    throw new ReportJobError(
+      "invalid_model_output",
+      "Report excludes more segments than the interview stored"
+    );
+  }
+  // Without transcript segments the saved answers are the only questions, so
+  // every stored answer must produce exactly one score slot.
+  if (context.segments.length === 0 && context.qaPairs.length > 0) {
+    const expectedIndexes = [
+      ...new Set(context.qaPairs.map((pair) => pair.questionIndex)),
+    ].sort((a, b) => a - b);
+    const reportedIndexes = [...indexes].sort((a, b) => a - b);
+    if (
+      expectedIndexes.length !== reportedIndexes.length ||
+      expectedIndexes.some((index, position) => index !== reportedIndexes[position])
+    ) {
+      throw new ReportJobError(
+        "invalid_model_output",
+        "Report does not cover every saved answer"
+      );
+    }
   }
 }
 
@@ -465,7 +614,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
     await job.updateProgress(5);
 
     let startedAt = performance.now();
-    await postSignedJson<{ success: boolean }>(
+    const started = await postSignedJson<{ success: boolean; stale?: boolean }>(
       `${config.convexSiteUrl}/worker/report-start`,
       {
         interviewId: payload.interviewId,
@@ -476,6 +625,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
       15_000
     );
     logStage("worker.report.start", startedAt, { jobId });
+    assertNotSuperseded(started);
 
     startedAt = performance.now();
     const rawContext = await postSignedJson<unknown>(
@@ -504,7 +654,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
       promptVersion: report.prompt_version,
     });
 
-    validateReport(report);
+    validateReport(report, context);
 
     await job.updateProgress(85);
 
@@ -524,9 +674,7 @@ export async function processReportJob(job: Job): Promise<ReportProcessResult> {
     );
     logStage("worker.report.persist", startedAt, { jobId });
 
-    if (persisted.stale) {
-      throw new UnrecoverableError(REPORT_ERROR_MESSAGES.stale_report_job);
-    }
+    assertNotSuperseded(persisted);
 
     await job.updateProgress(100);
 
@@ -556,7 +704,12 @@ export async function reportEvaluationTerminalFailure(
   if (!(await isTerminalFailure(job))) {
     return;
   }
-  if (!config.convexSiteUrl || !config.workerServiceKey) return;
+  if (!config.convexSiteUrl || !config.workerServiceKey) {
+    await job
+      .log("cannot report terminal failure: Convex worker configuration is missing")
+      .catch(() => undefined);
+    return;
+  }
 
   const payload = reportJobSchema.safeParse(job.data);
   if (!payload.success) {

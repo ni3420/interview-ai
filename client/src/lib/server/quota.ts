@@ -2,7 +2,11 @@ import type { ConvexHttpClient } from "convex/browser";
 import { NextResponse } from "next/server";
 import { api } from "@/convex/_generated/api";
 
-export type CostlyAction = "resume_process" | "report_generate" | "stream_agent";
+export type CostlyAction =
+  | "resume_process"
+  | "report_generate"
+  | "stream_agent"
+  | "stream_token";
 
 interface QuotaDecision {
   allowed: boolean;
