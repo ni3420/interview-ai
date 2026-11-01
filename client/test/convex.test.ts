@@ -296,8 +296,8 @@ describe("Convex - Answers", () => {
       mockCtx.db.get.mockResolvedValue(mockInterview);
       mockCtx.db.query.mockReturnValue({
         withIndex: vi.fn().mockReturnThis(),
-        filter: vi.fn().mockReturnThis(),
-        unique: vi.fn().mockResolvedValue(null),
+        order: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue(null),
       });
       mockCtx.db.insert.mockResolvedValue("new-answer-id");
 
@@ -323,8 +323,8 @@ describe("Convex - Answers", () => {
       mockCtx.db.get.mockResolvedValue(mockInterview);
       mockCtx.db.query.mockReturnValue({
         withIndex: vi.fn().mockReturnThis(),
-        filter: vi.fn().mockReturnThis(),
-        unique: vi.fn().mockResolvedValue({ _id: "existing-answer" }),
+        order: vi.fn().mockReturnThis(),
+        first: vi.fn().mockResolvedValue({ _id: "existing-answer" }),
       });
       mockCtx.db.patch.mockResolvedValue(undefined);
 
@@ -341,6 +341,37 @@ describe("Convex - Answers", () => {
         answer: "Updated answer",
         followUpCount: 1,
       });
+    });
+
+    it("picks the newest row when duplicate indices already exist", async () => {
+      mockCtx.db.get.mockResolvedValue(mockInterview);
+      const withIndex = vi.fn().mockReturnThis();
+      const first = vi.fn().mockResolvedValue({ _id: "newest-answer" });
+      mockCtx.db.query.mockReturnValue({
+        withIndex,
+        order: vi.fn().mockReturnThis(),
+        first,
+      });
+      mockCtx.db.patch.mockResolvedValue(undefined);
+
+      const result = await saveAnswer(mockCtx, {
+        interviewId: "interview-1",
+        questionIndex: 0,
+        question: "Test question",
+        answer: "Latest answer",
+        followUpCount: 0,
+      });
+
+      expect(withIndex).toHaveBeenCalledWith(
+        "by_interview_question",
+        expect.any(Function)
+      );
+      expect(result).toBe("newest-answer");
+      expect(mockCtx.db.patch).toHaveBeenCalledWith(
+        "newest-answer",
+        expect.objectContaining({ answer: "Latest answer" })
+      );
+      expect(mockCtx.db.insert).not.toHaveBeenCalled();
     });
 
     it("throws when the caller does not own the interview", async () => {

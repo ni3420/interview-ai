@@ -11,6 +11,7 @@ import { ArrowLeft, CheckCircle, Clock, MessageSquare, Users, Video } from "luci
 import { Button } from "@/components/ui/button";
 import {
   TranscriptionPanel,
+  type PersistedTranscriptSegment,
   type TranscriptItem,
 } from "./transcription-panel";
 import { useStreamSession } from "./stream-provider";
@@ -26,6 +27,10 @@ interface InterviewRoomProps {
   onTranscript?: (item: TranscriptItem) => void;
   /** Optional sink for every finalized caption (new or refined). */
   onSegment?: (item: TranscriptItem, isUpdate: boolean) => void;
+  /** Segments saved earlier in this interview, shown when the room reopens. */
+  initialSegments?: ReadonlyArray<PersistedTranscriptSegment>;
+  /** True while transcript writes are failing after retries. */
+  persistenceDegraded?: boolean;
   isFinishing?: boolean;
   /** Epoch ms when the interview started (persisted in Convex). */
   startedAt?: number | null;
@@ -112,6 +117,8 @@ export function InterviewRoom({
   onFinish,
   onTranscript,
   onSegment,
+  initialSegments,
+  persistenceDegraded = false,
   isFinishing = false,
   startedAt = null,
   durationMinutes,
@@ -136,6 +143,17 @@ export function InterviewRoom({
         remainingMs={remainingMs}
       />
 
+      {persistenceDegraded && (
+        <div
+          role="status"
+          data-testid="persistence-warning"
+          className="border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-center text-xs font-medium text-amber-300"
+        >
+          Transcript saving is failing. Recent turns may be missing from your
+          report.
+        </div>
+      )}
+
       <main className="grid flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-[1fr_400px]">
         <div className="flex h-full flex-col gap-4 overflow-hidden">
           <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 shadow-2xl">
@@ -159,6 +177,7 @@ export function InterviewRoom({
           <TranscriptionPanel
             call={call}
             candidateId={session.user.id}
+            initialSegments={initialSegments}
             onTranscript={onTranscript}
             onSegment={onSegment}
           />

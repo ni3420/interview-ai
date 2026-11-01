@@ -25,11 +25,18 @@ export const saveAnswer = mutation({
     const interview = await ctx.db.get(args.interviewId);
     if (!interview || interview.userId !== userId) throw new Error("Not found");
 
+    // Index suffixes carry `_creationTime`, so `desc` picks the newest row when
+    // two tabs raced onto the same index. `.unique()` would throw instead of
+    // choosing, which permanently blocked saves for that question.
     const existing = await ctx.db
       .query("answers")
-      .withIndex("by_interview", (q) => q.eq("interviewId", args.interviewId))
-      .filter((q) => q.eq(q.field("questionIndex"), args.questionIndex))
-      .unique();
+      .withIndex("by_interview_question", (q) =>
+        q
+          .eq("interviewId", args.interviewId)
+          .eq("questionIndex", args.questionIndex)
+      )
+      .order("desc")
+      .first();
 
     const now = Date.now();
 

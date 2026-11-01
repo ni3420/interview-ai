@@ -53,7 +53,15 @@ Verified 2026-10-28:
   no per-turn retrieval; agent registry is in memory (`realtime/manager.py:19`).
 - Transcript: Stream `call.closed_caption` → `transcription-panel.tsx` dedupe →
   `transcript-recorder.ts` reducer → `answers.saveAnswer` upsert on
-  (`interviewId`, `questionIndex`).
+  (`interviewId`, `questionIndex`) via the `by_interview_question` index. Raw
+  captions upsert into `transcriptSegments` on (`interviewId`, `segmentKey`).
+  On reopen the room rehydrates from both tables: saved segments seed the panel
+  ahead of live captions (live text wins on a shared key, and seeded keys are
+  not reduced into a second answer), and saved answers set the next index so a
+  reload cannot overwrite question 0 (Phase 4d, 2026-11-01).
+- Transcript writes retry twice (400 ms, 1.2 s) before reporting to GlitchTip; the
+  room shows a non-blocking amber banner when a write stays failed. Answers wait up
+  to 5 s for the saved-answers query, then proceed unindexed rather than block.
 - Plan shape: the prompt asks for **5–7** questions (`ai/prompts/interview.py:10`); the
   realtime agent caps its agenda at 25 (`config.py:72`); `durationMinutes` defaults to 30
   (`convex/interviews.ts:23`). Marketing copy must use these numbers.
@@ -324,7 +332,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-14 | `validation.ts:7,10`; `worker/src/job.ts:20`; `schemas/interview.py:6-7`; `resume.ts#getProcessingContext` |
 | G-15 | `app/interview/[id]/lobby/page.tsx:33` |
 | G-16 | `realtime/instructions.py:38-69` |
-| G-17 | `convex/answers.ts:26-31`; `transcript-recorder.ts:84` |
+| G-17 | **partially fixed 2026-11-01** — `transcript-recorder.ts:115` drops candidate speech with no question instead of storing an unlabeled row; the same speech still reaches the report through `transcriptSegments`, but the Q&A view loses it |
 | G-18 | `setup/page.tsx:85-94`; `stream-provider.tsx:137-138` |
 | G-19 | **fixed 2026-10-31** — `reportJobs.enqueuedAt`/`startedAt`/`completedAt`; worker `jobTiming` on terminal logs; room `turn.response` logs turn latency (live samples 5335 / 342 / 4640 ms on 2026-11-01) |
 | G-20 | `worker/src/report-processor.ts:59-91,167`; `convex/schema.ts:68-72` |
@@ -341,9 +349,9 @@ Every debt row in AGENTS.md points at one of these.
 | G-31 | `convex/resume.ts:36-45` |
 | G-32 | `convex/reports.ts:55-79` |
 | G-33 | `convex/resume.ts:102-123`; `api/resume/process/route.ts:72,101` |
-| G-34 | `use-transcript-recorder.ts:23`; `transcript-recorder.ts:25-30` |
-| G-35 | `transcription-panel.tsx:146-150` |
-| G-36 | `use-transcript-recorder.ts:35-42` |
+| G-34 | **fixed 2026-11-01** — the room loads `getAnswers` + `getTranscriptSegments`; `recorderStateFromAnswers` resumes at the next index and the panel seeds saved rows, so a reload no longer resets the transcript or overwrites answer 0 |
+| G-35 | **fixed 2026-11-01** — segments upsert on `segmentKey`; the panel now renders stored rows ahead of live captions and suppresses re-reducing a saved utterance. Unit-tested; reload not yet exercised live |
+| G-36 | **fixed 2026-11-01** — answer and segment writes retry twice (400 ms, 1.2 s); a still-failing write raises `persistenceDegraded` and the room shows a warning banner. Unit-tested |
 | G-37 | `use-interview-timer.ts`; `runner.py:68-105`; `api/v1/realtime.py:57-61` |
 | G-38 | `convex/http.ts:14` |
 | G-39 | `worker/src/processor.ts:181-201` |

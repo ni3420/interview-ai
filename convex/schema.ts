@@ -114,7 +114,9 @@ export default defineSchema({
     answer: v.string(),
     followUpCount: v.number(),
     createdAt: v.number(),
-  }).index("by_interview", ["interviewId"]),
+  })
+    .index("by_interview", ["interviewId"])
+    .index("by_interview_question", ["interviewId", "questionIndex"]),
 
   // Raw, finalized caption segments. This is the fidelity layer: the report is
   // derived from these rows and never from a cleaned or reconstructed version

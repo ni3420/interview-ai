@@ -168,10 +168,13 @@ not by an id supplied by the client.
    untrusted-data note; `@` is rewritten to `(at)` because the instruction container
    parses `@file` references. **No retrieval happens during the call** (G-16).
 4. Turns are captured from `call.closed_caption` events. `TranscriptionPanel` dedupes by
-   `speaker_id|start_time`; `useTranscriptRecorder` reduces question/answer pairs and
-   serially calls `answers.saveAnswer`, which upserts on (`interviewId`, `questionIndex`).
-   If the interviewer's captions never arrive, answers are stored under a synthetic group
-   with no question text (G-17).
+   `speaker_id|start_time` and seeds itself from stored `transcriptSegments` on reopen;
+   `useTranscriptRecorder` reduces question/answer pairs and serially calls
+   `answers.saveAnswer`, which upserts on (`interviewId`, `questionIndex`) through the
+   `by_interview_question` index, resuming at the next index after a reload. Writes retry
+   twice and set `persistenceDegraded` when they keep failing. Candidate speech that
+   follows no interviewer question is not written as a Q&A row (G-17); its raw segment is
+   still persisted for the report.
 5. "End interview" calls `interviews.updateInterviewStatus(completed)`, tells the
    interviewer to leave (`POST /api/stream/agent/leave` → `/v1/realtime/leave`; fire-and-forget,
    non-fatal) and navigates to `/interview/[id]/report`. Closing the tab does not end the

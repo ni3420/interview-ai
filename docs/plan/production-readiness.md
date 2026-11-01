@@ -60,9 +60,11 @@ passing item is the documentation drift script. Everything else fails:
    G-24, High.
 4. **Clients can write derived state.** `updateInterviewStatus`, `saveReport` and
    `markResumeStatus` are callable with arbitrary values (G-23, G-32, G-33, G-44).
-5. **The transcript is not durable.** Reload loses the in-memory reducer, caption updates
-   are not persisted, question text can freeze as `"Interview question"`, and turn saves
-   have no retry (G-17, G-34, G-35, G-36).
+5. **The transcript was not durable** (largely closed by Phase 4d, 2026-11-01). Reload
+   used to restart the reducer at index 0 and overwrite the first answer; the room now
+   rehydrates from stored answers and segments, and writes retry twice with a visible
+   warning on failure. Remaining: candidate speech with no preceding question is still
+   absent from the Q&A rows (G-17), though its raw segment reaches the report.
 6. **The report is not fully evidence-based.** Coverage can be short (G-20), there is no
    quote per score (`convex/schema.ts:68-72`), and the overall score is whatever the model
    returns (`worker/src/report-processor.ts:167`), not derived from per-answer scores.
@@ -138,8 +140,8 @@ Statuses: **working**, **unreliable**, **partial**, **missing**, **unverified**.
 | Live agent dispatch | partial | fire-and-forget, 15 s route timeout, no state row, no retry (G-13) |
 | Live grounding | partial | built once at join; no mid-call retrieval (G-16) |
 | Conversational state UI | **missing** | room shows only "Live" and participant count (G-49) |
-| Transcript capture | unreliable | dedupe works; reload/update/retry gaps (G-34, G-35, G-36) |
-| Question attribution | unreliable | freezes as `"Interview question"`; `followUpCount` always 0 (G-17) |
+| Transcript capture | reliable (unit-tested) | dedupe, reload rehydration and retry added 2026-11-01 (G-34, G-35, G-36); not yet exercised by a live reload |
+| Question attribution | partial | unlabeled speech is dropped rather than frozen as `"Interview question"` (G-17); `followUpCount` always 0 |
 | End interview | partial | persists `completed` with no transition check; leave control ends it (G-23, G-49) |
 | Session expiry | **missing** | no server-owned deadline or reaper (G-37); token expires at 3600 s (G-26) |
 | Report generation | working | queue + job state + validation; partial report possible (G-20) |
@@ -195,7 +197,7 @@ Gaps against the master prompt:
 |---|---|---|
 | Show state (preparing/listening/processing/responding/reconnecting) | only "Live" + participant count | G-49 |
 | Handle interruptions / silence / STT errors | delegated to Gemini Live | no UI or recovery copy |
-| Prevent duplicate questions/answers | dedupe on `speaker|start_time`; upsert on `(interviewId, questionIndex)` | reload and re-delivery gaps (G-34, G-35) |
+| Prevent duplicate questions/answers | dedupe on `speaker|start_time`; upsert on `(interviewId, questionIndex)`; reload resumes at the next index and saved utterances are not re-reduced | closed 2026-11-01 (G-34, G-35); live reload still to be exercised |
 | Reconnect | Stream SDK reconnect, but no explicit handling; dispatch is one-shot | G-13 |
 | End intentionally | "End Interview" and the leave button both call `onFinish` | no confirmation; accidental ends (G-49) |
 | Accidental disconnect | closing the tab leaves the interview `in_progress` | G-37 |
@@ -319,7 +321,7 @@ Failure matrix. Detection must be server-side; a toast alone is not detection.
 | Model timeout | 900 s abort | none | none | 504 | explicit per-call timeout (G-29), budget 120 s |
 | Agent dispatch fails | fetch rejects | none | none | warning toast | 3 attempts, then `realtimeSessions.failed` + Rejoin (G-13) |
 | Agent dies mid-call | **none** | none | none | silence | heartbeat + Rejoin (G-13) |
-| Captions stop | **none** | none | none | partial transcript | detect gap, banner, keep local buffer (G-36) |
+| Captions stop | **none** | none | none | partial transcript | detect gap; a stalled *write* already retries twice and shows a banner |
 | Tab close | none | none | none | interview stuck `in_progress` | server deadline closes it (G-37) |
 | Token expiry | join error | none | none | reconnect fails | mint for duration + 10 min (G-26) |
 | Worker crash | BullMQ | 3× résumé, 2× report | terminal callback | job failed | kept; stale sweep + `requeue` CLI close the loop (G-19) |
@@ -426,12 +428,15 @@ write `ready`/`completed`/report rows. Effort: M.
 
 ### Phase 2 — session durability (High)
 
-G-13 `realtimeSessions` + 3-attempt dispatch + Rejoin; G-17/G-34/G-35/G-36 transcript
-hydration, latest-text persistence and bounded turn retries; G-37 server deadline and
-reaper; G-26 token lifetime; G-14/G-15 résumé-optional and correct-résumé readiness;
-G-49 room states and leave confirmation. Acceptance: a 30-minute session survives reload,
-caption re-delivery, agent failure and tab close with a complete report; T10/T12/T20/T21
-and Q8 pass. Effort: L. Depends on Phase 1 (transition table).
+**Done 2026-11-01 (Phase 4d):** G-34/G-35/G-36 transcript hydration, saved-utterance
+dedupe and bounded turn retries; G-17 now drops unlabeled speech instead of storing it.
+
+**Still open in this phase:** G-13 `realtimeSessions` + 3-attempt dispatch + Rejoin;
+G-37 server deadline and reaper; G-26 token lifetime; G-14/G-15 résumé-optional and
+correct-résumé readiness; G-49 room states and leave confirmation. Acceptance: a
+30-minute session survives reload, caption re-delivery, agent failure and tab close with
+a complete report; T10/T12/T20/T21 and Q8 pass. Effort: L (remaining, M). Depends on
+Phase 1 (transition table).
 
 ### Phase 3 — report correctness (High)
 

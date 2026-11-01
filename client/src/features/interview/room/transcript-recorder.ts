@@ -20,6 +20,11 @@ export interface RecorderState {
   currentIndex: number;
   /** Text accumulated for the answer currently being built. */
   currentAnswer: string;
+  /**
+   * True when the state was rebuilt from saved answers: the pending question
+   * came from before the reload, so the next interviewer turn is a new question.
+   */
+  resumed: boolean;
 }
 
 export const initialRecorderState: RecorderState = {
@@ -27,6 +32,7 @@ export const initialRecorderState: RecorderState = {
   nextIndex: 0,
   currentIndex: -1,
   currentAnswer: "",
+  resumed: false,
 };
 
 export interface RecordedAnswer {
@@ -34,6 +40,39 @@ export interface RecordedAnswer {
   question: string;
   answer: string;
   followUpCount: number;
+}
+
+/** The minimum shape of a persisted answer needed to resume the reducer. */
+export interface PersistedAnswer {
+  questionIndex: number;
+  question: string;
+}
+
+/**
+ * Rebuilds reducer state from answers saved earlier in this interview.
+ *
+ * Without this, a reload restarts `nextIndex` at 0 and the next answer would
+ * overwrite the first saved row. `currentIndex` stays -1 so a continuation is
+ * written as a new row instead of being appended to a finished answer; the
+ * pending question is kept so that continuation still carries its question.
+ */
+export function recorderStateFromAnswers(
+  answers: ReadonlyArray<PersistedAnswer>
+): RecorderState {
+  if (answers.length === 0) return initialRecorderState;
+
+  let last = answers[0];
+  for (const answer of answers) {
+    if (answer.questionIndex > last.questionIndex) last = answer;
+  }
+
+  return {
+    pendingQuestion: last.question,
+    nextIndex: last.questionIndex + 1,
+    currentIndex: -1,
+    currentAnswer: "",
+    resumed: true,
+  };
 }
 
 export function isInterviewerTurn(item: TranscriptItem): boolean {
@@ -50,9 +89,10 @@ export function applyTranscriptTurn(
 ): { state: RecorderState; answer: RecordedAnswer | null } {
   if (isInterviewerTurn(item)) {
     // A candidate already answered (currentIndex >= 0) means this opens a new
-    // question. Otherwise it is another segment of the question being asked.
+    // question; so does a resumed state, whose question predates the reload.
+    // Otherwise it is another segment of the question being asked.
     const startsNewQuestion =
-      state.currentIndex >= 0 || !state.pendingQuestion;
+      state.resumed || state.currentIndex >= 0 || !state.pendingQuestion;
     const question = startsNewQuestion
       ? item.text
       : `${state.pendingQuestion} ${item.text}`.trim();
@@ -63,6 +103,7 @@ export function applyTranscriptTurn(
         pendingQuestion: question,
         currentIndex: -1,
         currentAnswer: "",
+        resumed: false,
       },
       answer: null,
     };
@@ -87,6 +128,7 @@ export function applyTranscriptTurn(
       currentIndex: questionIndex,
       currentAnswer: answer,
       nextIndex: startsNewAnswer ? state.nextIndex + 1 : state.nextIndex,
+      resumed: false,
     },
     answer: {
       questionIndex,

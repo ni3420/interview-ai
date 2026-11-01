@@ -242,6 +242,80 @@ describe("TranscriptionPanel", () => {
     expect(screen.getByText(/Listening to the conversation/i)).toBeInTheDocument();
   });
 
+  it("shows segments saved before this mount", () => {
+    const { call } = createFakeCall();
+    render(
+      <TranscriptionPanel
+        call={call}
+        initialSegments={[
+          {
+            _id: "seg-1",
+            segmentKey: "agent|2026-01-01T10:00:00.000Z",
+            speaker: "interviewer",
+            speakerConfidence: 1,
+            start: Date.parse("2026-01-01T10:00:00.000Z"),
+            end: Date.parse("2026-01-01T10:00:02.000Z"),
+            text: "Tell me about your React experience.",
+          },
+          {
+            _id: "seg-2",
+            segmentKey: "user_1|2026-01-01T10:00:03.000Z",
+            speaker: "candidate",
+            speakerConfidence: 1,
+            start: Date.parse("2026-01-01T10:00:03.000Z"),
+            end: Date.parse("2026-01-01T10:00:05.000Z"),
+            text: "I built several design systems.",
+          },
+        ]}
+      />
+    );
+
+    const groups = screen.getAllByTestId("transcript-group");
+    expect(groups).toHaveLength(1);
+    expect(
+      within(groups[0]).getByText("Tell me about your React experience.")
+    ).toBeInTheDocument();
+    expect(
+      within(groups[0]).getByText("I built several design systems.")
+    ).toBeInTheDocument();
+  });
+
+  it("does not record a turn twice when a saved utterance is re-delivered", () => {
+    const { call, emit } = createFakeCall();
+    const onTranscript = vi.fn<(item: TranscriptItem) => void>();
+    render(
+      <TranscriptionPanel
+        call={call}
+        onTranscript={onTranscript}
+        initialSegments={[
+          {
+            _id: "seg-1",
+            segmentKey: "agent|t1",
+            speaker: "interviewer",
+            speakerConfidence: 1,
+            start: Date.parse("2026-01-01T10:00:00.000Z"),
+            end: Date.parse("2026-01-01T10:00:02.000Z"),
+            text: "Tell me about React.",
+          },
+        ]}
+      />
+    );
+
+    act(() => {
+      emit({
+        closed_caption: {
+          id: "q-1",
+          text: "Tell me about React.",
+          speaker_id: "agent",
+          start_time: "t1",
+        },
+      });
+    });
+
+    expect(screen.getAllByText("Tell me about React.")).toHaveLength(1);
+    expect(onTranscript).not.toHaveBeenCalled();
+  });
+
   it("unsubscribes from the call on unmount", () => {
     const { call, handlerCount } = createFakeCall();
     const { unmount } = render(<TranscriptionPanel call={call} />);

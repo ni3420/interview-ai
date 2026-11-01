@@ -3,6 +3,7 @@ import {
   applyTranscriptTurn,
   initialRecorderState,
   isInterviewerTurn,
+  recorderStateFromAnswers,
 } from "@/features/interview/room/transcript-recorder";
 import { AI_INTERVIEWER_ID, AI_INTERVIEWER_NAME } from "@/features/interview/room/constants";
 import type { TranscriptItem } from "@/features/interview/room/transcription-panel";
@@ -161,5 +162,66 @@ describe("applyTranscriptTurn", () => {
     const { answer } = applyTranscriptTurn(state, turn({ text: "Sure." }));
 
     expect(answer?.question).toBe("Tell me about your React experience.");
+  });
+});
+
+describe("recorderStateFromAnswers", () => {
+  it("starts from scratch when nothing was saved", () => {
+    expect(recorderStateFromAnswers([])).toEqual(initialRecorderState);
+  });
+
+  it("resumes at the next index instead of overwriting answer 0", () => {
+    const state = recorderStateFromAnswers([
+      { questionIndex: 0, question: "Q1" },
+      { questionIndex: 1, question: "Q2" },
+    ]);
+
+    expect(state).toEqual({
+      pendingQuestion: "Q2",
+      nextIndex: 2,
+      currentIndex: -1,
+      currentAnswer: "",
+      resumed: true,
+    });
+  });
+
+  it("uses the highest index even when rows arrive out of order", () => {
+    const state = recorderStateFromAnswers([
+      { questionIndex: 3, question: "Q4" },
+      { questionIndex: 1, question: "Q2" },
+    ]);
+
+    expect(state.nextIndex).toBe(4);
+    expect(state.pendingQuestion).toBe("Q4");
+  });
+
+  it("writes a post-reload continuation as a new row, not an overwrite", () => {
+    const resumed = recorderStateFromAnswers([
+      { questionIndex: 0, question: "Tell me about yourself." },
+    ]);
+
+    const { answer } = applyTranscriptTurn(resumed, turn({ text: "To continue..." }));
+
+    expect(answer?.questionIndex).toBe(1);
+    expect(answer?.question).toBe("Tell me about yourself.");
+  });
+
+  it("starts a fresh question on the first interviewer turn after a reload", () => {
+    const resumed = recorderStateFromAnswers([
+      { questionIndex: 0, question: "Tell me about yourself." },
+    ]);
+
+    const { state } = applyTranscriptTurn(
+      resumed,
+      turn({ speakerId: AI_INTERVIEWER_ID, text: "Why this role?" })
+    );
+    const { answer } = applyTranscriptTurn(state, turn({ text: "I like the mission." }));
+
+    expect(answer).toEqual({
+      questionIndex: 1,
+      question: "Why this role?",
+      answer: "I like the mission.",
+      followUpCount: 0,
+    });
   });
 });

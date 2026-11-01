@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Call } from "@stream-io/video-react-sdk";
 import { Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,10 +52,27 @@ interface DisplayCaption extends TranscriptItem {
   utteranceKey: string;
 }
 
+/** A transcript segment persisted by an earlier mount of this room. */
+export interface PersistedTranscriptSegment {
+  _id: string;
+  segmentKey: string;
+  speaker: TranscriptSpeakerRole;
+  speakerConfidence: number;
+  start: number;
+  end: number;
+  text: string;
+  asrConfidence?: number;
+}
+
 interface TranscriptionPanelProps {
   call: Call;
   /** The signed-in candidate's Stream user id. */
   candidateId?: string;
+  /**
+   * Segments already stored for this interview. Seeded on first arrival so a
+   * reload or a second tab still shows the conversation so far.
+   */
+  initialSegments?: ReadonlyArray<PersistedTranscriptSegment>;
   /** Called once for every new finalized utterance, e.g. to persist an answer. */
   onTranscript?: (item: TranscriptItem) => void;
   /**
@@ -80,6 +97,33 @@ function formatTime(at: number): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+function persistedToCaption(
+  segment: PersistedTranscriptSegment
+): DisplayCaption {
+  return {
+    id: segment._id,
+    segmentKey: segment.segmentKey,
+    utteranceKey: segment.segmentKey,
+    // Stream's speaker id is not stored with the segment; the role is enough
+    // to render it, and the raw id is irrelevant after the call.
+    speakerId: "",
+    speaker:
+      segment.speaker === "interviewer"
+        ? AI_INTERVIEWER_NAME
+        : segment.speaker === "candidate"
+          ? "You"
+          : "Participant",
+    speakerRole: segment.speaker,
+    speakerConfidence: segment.speakerConfidence,
+    start: segment.start,
+    end: segment.end,
+    text: segment.text,
+    timestamp: formatTime(segment.start),
+    asrConfidence: segment.asrConfidence,
+    isFinal: true,
+  };
 }
 
 function attributeSpeaker(
@@ -158,11 +202,12 @@ function groupByQuestion(captions: DisplayCaption[]): QuestionGroup[] {
 export function TranscriptionPanel({
   call,
   candidateId,
+  initialSegments,
   onTranscript,
   onSegment,
   className,
 }: TranscriptionPanelProps) {
-  const [captions, setCaptions] = useState<DisplayCaption[]>([]);
+  const [liveCaptions, setLiveCaptions] = useState<DisplayCaption[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const onTranscriptRef = useRef(onTranscript);
   const onSegmentRef = useRef(onSegment);
@@ -175,6 +220,32 @@ export function TranscriptionPanel({
     onSegmentRef.current = onSegment;
     candidateIdRef.current = candidateId;
   }, [onTranscript, onSegment, candidateId]);
+
+  const persistedCaptions = useMemo(
+    () => (initialSegments ?? []).map(persistedToCaption),
+    [initialSegments]
+  );
+
+  // Saved rows are rendered ahead of live ones, keyed by utterance so a
+  // re-delivered caption replaces its stored copy instead of duplicating it.
+  const captions = useMemo(() => {
+    if (persistedCaptions.length === 0) return liveCaptions;
+    const liveKeys = new Set(liveCaptions.map((caption) => caption.utteranceKey));
+    return [
+      ...persistedCaptions.filter(
+        (caption) => !liveKeys.has(caption.utteranceKey)
+      ),
+      ...liveCaptions,
+    ].sort((a, b) => a.start - b.start);
+  }, [persistedCaptions, liveCaptions]);
+
+  // Already-saved utterances must not be reduced into a second answer row when
+  // Stream re-delivers them after a reload.
+  useEffect(() => {
+    for (const caption of persistedCaptions) {
+      seenUtterancesRef.current.add(caption.utteranceKey);
+    }
+  }, [persistedCaptions]);
 
   useEffect(() => {
     if (!call) return;
@@ -213,7 +284,7 @@ export function TranscriptionPanel({
 
       const isUpdate = seenUtterancesRef.current.has(utteranceKey);
 
-      setCaptions((previous) => {
+      setLiveCaptions((previous) => {
         const index = previous.findIndex(
           (entry) => entry.utteranceKey === utteranceKey
         );

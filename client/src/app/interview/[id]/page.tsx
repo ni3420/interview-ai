@@ -13,6 +13,8 @@ import { StreamProvider } from "@/features/interview/room/stream-provider";
 import { InterviewRoom } from "@/features/interview/room/interview-room";
 import { stopInterviewerAgent } from "@/features/interview/room/stream-session";
 import { useTranscriptRecorder } from "@/features/interview/room/use-transcript-recorder";
+import type { PersistedAnswer } from "@/features/interview/room/transcript-recorder";
+import type { PersistedTranscriptSegment } from "@/features/interview/room/transcription-panel";
 
 type InterviewStatus = "setup" | "in_progress" | "completed" | "failed";
 
@@ -40,8 +42,17 @@ export default function InterviewPage() {
     | Interview
     | undefined
     | null;
+  // Saved turns and captions let a reload continue the transcript instead of
+  // starting over at question 0.
+  const savedAnswers = useQuery(api.answers.getAnswers, { interviewId }) as
+    | PersistedAnswer[]
+    | undefined;
+  const savedSegments = useQuery(api.answers.getTranscriptSegments, {
+    interviewId,
+  }) as PersistedTranscriptSegment[] | undefined;
   const updateStatus = useMutation(api.interviews.updateInterviewStatus);
-  const { recordTurn, recordSegment } = useTranscriptRecorder(interviewId);
+  const { recordTurn, recordSegment, persistenceDegraded } =
+    useTranscriptRecorder(interviewId, { initialAnswers: savedAnswers });
 
   const [isFinishing, setIsFinishing] = useState(false);
 
@@ -112,6 +123,8 @@ export default function InterviewPage() {
         onFinish={handleFinish}
         onTranscript={recordTurn}
         onSegment={recordSegment}
+        initialSegments={savedSegments}
+        persistenceDegraded={persistenceDegraded}
         isFinishing={isFinishing}
         startedAt={interview.startedAt ?? null}
         durationMinutes={interview.durationMinutes ?? 30}
