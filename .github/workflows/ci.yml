@@ -35,6 +35,15 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      # Client tests and typechecks compile sources from ../convex and
+      # ../worker/src, so those packages must be installed where Node and
+      # TypeScript resolution looks for them (repo root and worker/).
+      - name: Install root dependencies
+        working-directory: .
+        run: bun install --frozen-lockfile
+      - name: Install worker dependencies
+        working-directory: worker
+        run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
       - run: bun run test
       - run: bunx tsc --noEmit

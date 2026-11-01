@@ -317,6 +317,8 @@ Measured on this tree on 2026-11-01:
 
 Lint is only partially gated. `bun run lint` reports 0 errors and 9 warnings; Python lint (`ruff`) still has pre-existing findings and is not part of CI.
 
+Two client gates read sources outside `client/`: `../convex` and `../worker/src/job.ts`. Run `bun install` at the repository root and in `worker/` once, or those imports will not resolve on a fresh clone. CI installs all three.
+
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the client tests, both typechecks, the production build, the E2E harness, the worker suite, and the AI suite. CI status is not claimed here — check the Actions tab of the repository you are reading.
 
 ## Known limitations
