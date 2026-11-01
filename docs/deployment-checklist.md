@@ -57,14 +57,14 @@ to start without it.
 
 | Variable | Required | Notes |
 |---|---|---|
-| `NEXT_PUBLIC_CONVEX_URL` | yes | Convex client URL; also read by `/api/stream/token` and `/api/stream/agent` |
+| `NEXT_PUBLIC_CONVEX_URL` | yes | Convex client URL; also read by `/api/stream/token`, `/api/stream/agent` and `/api/stream/agent/leave` |
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | yes | browser key |
 | `CLERK_SECRET_KEY` | yes | server key |
 | `NEXT_PUBLIC_CLERK_SIGN_IN_URL` / `_SIGN_UP_URL` | yes | must match real routes (`/sign-in`, `/sign-up`) |
 | `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL` / `_SIGN_UP_URL` | yes | `/dashboard` |
 | `REDIS_URL` | yes | queue producer for `/api/resume/process` and `/api/report/generate` |
-| `AI_SERVICE_URL` | yes | `/api/stream/agent` target; defaults to `http://localhost:8000` if unset — always set it in prod |
-| `AI_SERVICE_API_KEY` | yes | signing secret for `/api/stream/agent`; route returns 503 when unset |
+| `AI_SERVICE_URL` | yes | `/api/stream/agent` and `/api/stream/agent/leave` target; defaults to `http://localhost:8000` if unset — always set it in prod |
+| `AI_SERVICE_API_KEY` | yes | signing secret for `/api/stream/agent` and `/api/stream/agent/leave`; the dispatch route returns 503 when unset |
 | `STREAM_API_KEY`, `STREAM_API_SECRET` | yes for live interviews | `/api/stream/token`; server-only |
 | `RESUME_FETCH_HOST` | conditional | only when the worker/AI service must rewrite a loopback storage URL (container dev). Leave unset when Convex is publicly reachable |
 | `CONVEX_SITE_URL` | optional | informational; no client code reads it today |
@@ -233,6 +233,8 @@ a pass is the observed result, not the intention.
 - [ ] Agent dispatch succeeds once; a 21st dispatch within the hour returns `429`
       (`stream_agent`, limit 20/h).
 - [ ] Captions append to the transcript; a dropped agent leaves existing answers intact.
+- [ ] Ending the interview makes the interviewer leave the call (`/api/stream/agent/leave`
+      returns 200 and the AI service's `active_calls` empties), not just the candidate.
 
 ### Failure and recovery
 - [ ] Kill the worker mid-job. The job is retried; on terminal failure the Convex state is

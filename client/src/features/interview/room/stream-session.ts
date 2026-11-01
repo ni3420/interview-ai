@@ -104,3 +104,24 @@ export async function dispatchInterviewerAgent(
     throw new Error(reason);
   }
 }
+
+/**
+ * Removes the AI interviewer from the interview's call.
+ *
+ * The agent's own `finish()` waits for the call to end, which cannot happen
+ * while the agent is still a participant, so the paid realtime session stays
+ * open until it is told to leave.
+ */
+export async function stopInterviewerAgent(interviewId: string): Promise<void> {
+  const response = await fetch("/api/stream/agent/leave", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ interviewId }),
+    // The candidate navigates to the report as soon as this is sent.
+    keepalive: true,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Agent stop failed (${response.status})`);
+  }
+}

@@ -83,6 +83,8 @@ describe("buildContentSecurityPolicy", () => {
     expect(connect).toContain("wss://fast-otter-123.convex.cloud");
     expect(connect).toContain("https://video.stream-io-api.com");
     expect(connect).toContain("wss://video.stream-io-api.com");
+    // Per-call media SFU (observed live: sfu-oci-mumbai-vp1-<id>.stream-io-video.com).
+    expect(connect).toContain("wss://*.stream-io-video.com");
     expect(connect).toContain("https://o1.ingest.sentry.io");
 
     const sources = connect.split(" ").slice(1);

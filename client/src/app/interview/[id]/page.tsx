@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { captureException } from "@/lib/glitchtip";
 import { StreamProvider } from "@/features/interview/room/stream-provider";
 import { InterviewRoom } from "@/features/interview/room/interview-room";
+import { stopInterviewerAgent } from "@/features/interview/room/stream-session";
 import { useTranscriptRecorder } from "@/features/interview/room/use-transcript-recorder";
 
 type InterviewStatus = "setup" | "in_progress" | "completed" | "failed";
@@ -59,6 +60,15 @@ export default function InterviewPage() {
     setIsFinishing(true);
     try {
       await updateStatus({ interviewId, status: "completed" });
+      // The interviewer waits for the call to end, which cannot happen while
+      // it is still in the call, so it must be told to leave.
+      void stopInterviewerAgent(interviewId).catch((error) => {
+        captureException(error, {
+          interviewId,
+          scope: "interview-page",
+          step: "stop-interviewer",
+        });
+      });
       toast.success("Interview completed. Generating your report...");
       router.push(`/interview/${interviewId}/report`);
     } catch (error) {

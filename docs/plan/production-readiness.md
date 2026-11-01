@@ -29,8 +29,8 @@ Approving one phase does not authorize the next. Every phase ends with the gates
 | 3 Feature audit | §3 | yes |
 | 4 User journey audit | §4 | yes |
 | 5 Prioritized issue register | §5 | yes (register in AGENTS.md) |
-| 6 Performance baseline | §6 | partial — build measured, runtime `UNVERIFIED` |
-| 7 AI cost audit | §7 | partial — inventory done, cost `UNVERIFIED` (no token logging) |
+| 6 Performance baseline | §6 | partial — build measured; one live runtime sample, no p50/p95 |
+| 7 AI cost audit | §7 | partial — inventory done, text-call tokens logged; realtime audio `UNVERIFIED` |
 | 8 Reliability plan | §8 | yes |
 | 9 Security and privacy audit | §9 | yes, legal items flagged |
 | 10 Testing strategy | §10 | yes |
@@ -71,11 +71,13 @@ passing item is the documentation drift script. Everything else fails:
    exercised against a real DSN. Report-job latency (enqueue → start → complete) is
    recorded in Convex and worker terminal logs (G-19, done 2026-10-31), plan/report
    model calls log token usage and an optional cost estimate (done 2026-10-31), and the
-   room logs `turn.response` from caption timestamps (done 2026-10-31, no live sample
-   yet); Gemini Live usage is still missing. CI now exists
+   room logs `turn.response` from caption timestamps (done 2026-10-31; live samples
+   5335 / 342 / 4640 ms on 2026-11-01); Gemini Live usage is still missing. CI now exists
    (G-05) and the client ships origin-scoped security headers from `next.config.ts`
-   (G-42, done 2026-11-01: Clerk/Convex/Stream/Sentry hosts are built from env; only
-   `script-src 'unsafe-inline'` remains as the known weakness). Per-user fixed-window
+   (G-42, done 2026-11-01: Clerk/Convex/Stream/Sentry hosts are built from env; a live
+   call found the Stream SFU hosts missing — `wss://*.stream-io-video.com` and
+   `https://*.stream-io-video.com` added the same day; only `script-src 'unsafe-inline'`
+   remains as the known weakness). Per-user fixed-window
    budgets now cover interview creation, resume/report enqueueing and agent dispatch
    (G-06).
 
@@ -234,8 +236,9 @@ Root causes worth naming because they explain several rows at once:
    Python dict, so reload, tab close, token expiry and agent failure have no authoritative
    record (G-13, G-26, G-34, G-37).
 3. **No measurement layer.** Without timing, token counts and error events, latency and
-   cost targets cannot be set honestly (G-02). Report timing (G-19) and plan/report token
-   usage now exist; live room latency and Gemini Live usage are still missing.
+   cost targets cannot be set honestly (G-02). Report timing (G-19), plan/evaluate token
+   usage and room timing now exist, with first live room samples on 2026-11-01; Gemini
+   Live audio usage (minutes, not tokens) is still missing.
 
 ---
 
@@ -249,7 +252,7 @@ Measured 2026-10-28 on this machine:
 | Static payload (raw, all chunks) | **2.4 MB** | `du -sh client/.next/static` |
 | Largest chunk (raw) | **629 KB** | `find .next/static -name '*.js' -printf ...` |
 | gzip / per-route First Load JS | not emitted by this Next 16.4 build | — |
-| Runtime latency (join, first turn, turn) | **instrumented, no live sample** | room `room timing` logs: `room.token`, `room.join`, `room.dispatch`, `agent.audible`, `turn.response` |
+| Runtime latency (join, first turn, turn) | **live samples 2026-11-01** (one session, synthetic speech, post-fix call): token 2041 ms, join 6145 ms, captions 9828 ms, dispatch 1347 ms, agent audible 26,067 ms, turn 5335 / 342 / 4640 ms | room `room timing` logs: `room.token`, `room.join`, `room.captions`, `room.dispatch`, `agent.audible`, `turn.response` |
 | Report latency (enqueue → start → complete) | **instrumented, no production sample yet** | Convex `reportJobs` + worker terminal logs |
 
 Budgets to hold (from F9): dispatch ≤ 1.5 s, audible ≤ 5 s, turn ≤ 2.5 s, caption→row ≤ 2 s,
@@ -264,8 +267,12 @@ room records the caption `end_time`, and the next interviewer caption logs
 (`client/src/features/interview/room/room-timing.ts`). The media-timestamp delta is used
 when it is 0–60 s, otherwise caption arrival time. Because Stream emits a caption only
 after the interviewer's ASR finalizes it, the value is an upper bound on the agent's
-response time, not just model latency; it has not yet been observed on a real call.
-Derived p50/p95 requires ≥ 100 sessions; until then, any p95 claim is unverifiable. Bundle
+response time, not just model latency. First live samples (2026-11-01, synthetic speech,
+dev stack): turn 5335 / 342 / 4640 ms (and 6192 ms before the dispatch fix), dispatch
+1347 ms, agent audible 26,067 ms. Against the F9 budgets (dispatch ≤ 1.5 s, audible ≤ 5 s,
+turn ≤ 2.5 s) dispatch is within budget; audible and turn are not — both are dominated by
+agent join and Gemini turn-taking, not browser work. Derived p50/p95 requires ≥ 100
+sessions; until then, any p95 claim is unverifiable. Bundle
 target: set after gzip measurement; do not invent one now.
 
 ---
@@ -282,16 +289,19 @@ Call inventory per completed interview (verified by reading handlers):
 | Evaluate | `AI_PROVIDER` | 1 | tokens |
 | Retries | provider/queue/dispatch | 0–3 | duplicates up to bounded retry counts |
 
-**Finding: there is no token or duration accounting anywhere.** No logger records model,
-prompt tokens, completion tokens, audio seconds or call duration; `Q9` and cost fields are
-absent. A per-interview figure would be a guess, so none is given.
+**Finding: text-model tokens are now logged; realtime audio is not.** Since 2026-10-31 the
+Gemini and Ollama providers call `record_usage` (`app/core/metrics.py`), emitting one
+`model usage` event per text call with `operation`, `provider`, `model`, `promptTokens`,
+`completionTokens`, `totalTokens` and `estimatedCostUsd` (null when the provider/model has
+no configured rate, or for local Ollama, rather than an invented number). This covers plan
+and evaluate. **Still missing:** Gemini Live audio seconds and call duration, i.e. the
+dominant cost driver. A per-interview figure would still be a guess, so none is given.
 
-Measurement plan: emit one structured event per model call (`provider`, `model`,
-`operation`, `promptTokens`, `completionTokens`, `audioSeconds`, `durationMs`,
-`interviewId`), aggregate per session, then price it with the provider's current rate card.
-Until that exists, cost targets are `UNVERIFIED` and the only honest control is structural:
-bounded retries already exist, retrieval is absent (so no retrieval spend), and the plan
-prompt is short.
+Measurement plan for the remainder: emit one structured event per realtime session
+(`audioSeconds`, `durationMs`, `interviewId`), then price it with the provider's current
+rate card. Until that exists, the realtime cost per interview is `UNVERIFIED` and the only
+honest control is structural: bounded retries already exist, retrieval is absent (so no
+retrieval spend), and the plan prompt is short.
 
 Optimization candidates, contingent on measurement: keep local embeddings, cap plan/evaluate
 prompt size (résumé excerpt already capped at 6 000 chars at join), reuse the stored plan

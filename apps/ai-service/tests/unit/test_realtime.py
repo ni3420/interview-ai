@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import settings
@@ -181,6 +182,12 @@ class FakeUser:
 class FakeRealtimeLLM:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
+        self.connected = True
+        self.connect_calls = 0
+
+    async def connect(self) -> None:
+        self.connect_calls += 1
+        self.connected = True
 
 
 class FakeGemini:
@@ -207,6 +214,7 @@ class FakeAgent:
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs
+        self.llm = kwargs.get("llm")
         self.responses: list[str] = []
         self.finished = False
         self.calls: list[tuple[str, str]] = []
@@ -298,3 +306,20 @@ class TestSchemaValidation:
             status="started", call_id="c", agent_user_id="ai-interviewer"
         )
         assert response.already_running is False
+
+
+class TestStartupWarmup:
+    """The ~13s vision-agents import must not run inside the first join request."""
+
+    def test_warms_the_realtime_runtime_on_startup(self):
+        with patch("app.main.ensure_available") as ensure_available:
+            with TestClient(app) as client:
+                assert client.get("/health").status_code == 200
+
+        ensure_available.assert_called_once_with()
+
+    def test_serves_health_when_realtime_is_unavailable(self):
+        unavailable = RealtimeRuntimeUnavailableError("no credentials")
+        with patch("app.main.ensure_available", side_effect=unavailable):
+            with TestClient(app) as client:
+                assert client.get("/health").status_code == 200

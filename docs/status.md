@@ -96,9 +96,9 @@ JS **578.0 KB gzip** across 35 files. Per-route gzip (root layout + route chunks
 The interview room carries about 176 KB gzip more than the dashboard and 162 KB more than
 any other route.
 
-Not measured: live turn latency at runtime (the room now logs `turn.response` from
-caption media timestamps — see Q9 below — but no real call has produced a sample),
-résumé download/extract/index stages (needs a PDF + Qdrant), and any real-device session.
+Not measured: résumé download/extract/index stages (needs a PDF + Qdrant) and any
+real-device session. Live turn latency is now measured from caption media timestamps —
+see §Performance baseline (2026-11-01 live calls).
 
 ## Does not exist
 
@@ -128,7 +128,8 @@ Verified 2026-10-28:
 - Dead exports (application callers = 0; test/generated references noted):
   `components/layout/SyncUser.tsx`, `answers.incrementQuestionIndex` (asserted in
   `client/test/convex.test.ts`), `interviews.saveInterviewPlan` (asserted in the same test),
-  `lib/ai-service.ts#generateNextQuestion`, and `/v1/realtime/leave` (no caller anywhere).
+  `lib/ai-service.ts#generateNextQuestion`. `/v1/realtime/leave` gained a caller on
+  2026-11-01 (`/api/stream/agent/leave`, used when the candidate finishes).
 
 ## Rule and tooling hazards
 
@@ -156,7 +157,7 @@ passing gates must stay green; failing gates must not get worse. Only the Releas
 | Q6 | **not run** — no UI change in the audit |
 | Q7 | **FAIL** — 13 toast calls; copy does not match D17 |
 | Q8 | **partial** (2026-11-01) — Playwright suite in `client/test/e2e` (3 flows: room-timing harness, landing page, signed-out redirect); a scripted fake call drives the real transcript panel. Only `room-timing.spec.ts` is credential-free and runs in the CI `e2e-harness` job via `test:e2e:harness`; `app-shell.spec.ts` needs a real Clerk dev instance and stays local. Mic/camera permission, reconnect and full-journey flows still absent |
-| Q9 | **partial** (2026-10-31 re-run) — join stages, report enqueue→start→complete timing and model token/cost events are instrumented (G-19); the room now logs `turn.response` (candidate speech end → interviewer speech start from caption timestamps), but no live call has produced a sample. Gemini Live audio-seconds usage and caption→row still have no producer. See §Performance baseline |
+| Q9 | **partial** (2026-11-01) — join stages, report enqueue→start→complete timing and model token/cost events are instrumented (G-19); the room logs `room.dispatch`, `agent.audible` and `turn.response` (candidate speech end → interviewer speech start from caption timestamps). A live call produced dispatch **1347 ms**, agent audible **26,067 ms** and turns **5335 / 342 / 4640 ms**. Gemini Live audio-seconds usage and caption→row still have no producer. See §Performance baseline |
 | Q10 | **pass** — typecheck 0, 11 tests passed / 0 failed |
 | Q11 | **pass** — `bun run build` exit 0, 16 routes |
 | Q12 | **FAIL** — 3 `dev-secret-key` hits (`compose.yaml:53,84`, `config.py:36`) |
@@ -205,6 +206,67 @@ same build: header carries the Clerk frontend-API host, Convex `http`+`ws`, Stre
 and `upgrade-insecure-requests`; a fresh signed-out browser loaded `/sign-in` and
 `/sign-up` with **0** CSP violations and **0** console errors. Not run: Q4–Q7, Q9–Q10,
 Q12–Q13.
+
+Live realtime checks (2026-11-01): real Stream calls on the dev server with the Gemini Live
+agent (signed-in dev account, synthetic mic audio injected in-page from a local TTS clip;
+overrides, clip and dev log deleted afterwards, sessions stopped). Findings:
+
+- **CSP regression found live and fixed.** The first join was blocked at
+  `wss://sfu-<region>-<id>.stream-io-video.com` and then at HTTPS Twirp
+  (`SignalServer/SendAnswer`, `IceTrickle`, `SendStats`) on the same host. `src/lib/csp.ts`
+  now also lists `wss://*.stream-io-video.com` and `https://*.stream-io-video.com`;
+  `client/test/csp.test.ts` asserts the wildcard and the suite passes 11/11. After a dev
+  rebuild the call joined.
+- **Join/turn measurements.** Two calls on the same day with the same synthetic clip:
+
+  | Stage | Pre-fix call (20:33Z) | After fixes (23:49Z) |
+  |---|---|---|
+  | `room.token` | 2700 ms | 2041 ms |
+  | `room.join` | 4166 ms | 6145 ms |
+  | `room.dispatch` | **18,100 ms → 502** | **1347 ms, 200** |
+  | `room.captions` | 15,730 ms (15,002 wait, fell back) | 9828 ms (8517 wait, interviewer present) |
+  | `agent.audible` | 54,666 ms | **26,067 ms** |
+  | `turn.response` | 6192 ms (arrival 11,136) | **5335 / 342 / 4640 ms** |
+  | `turn.persist` | 220 ms | 109–410 ms |
+
+  Earlier pre-fix joins measured `room.token` 2085–2576 ms, `room.join` 2765–4896 ms,
+  `room.captions` 522–922 ms, `room.dispatch` 830–4655 ms; their `agent.audible` sample
+  (27,274 ms) followed a manual caption restart and is not a baseline.
+- **False "agent could not join" (fixed).** The AI service's first `join-call` took ~18 s:
+  `ensure_available()` imported the vision-agents stack inside the request, and a cold
+  import measures **12.81 s** in the service image. The Next.js dispatcher aborts at 15 s,
+  so it returned `502 agent_unavailable` and showed a warning toast while the agent actually
+  joined. The runtime is now imported in the FastAPI lifespan (`app.main`), logging
+  `Realtime interviewer runtime ready` before `Application startup complete`; dispatch
+  dropped to 1347 ms with status 200.
+- **Captions started too early (guard added, root cause not reproduced).** Captions are now
+  started only once a remote participant is visible, with a 15 s cap, and restarted if the
+  interviewer joins after that cap (`room-captions.ts`, 11 unit tests). In the pre-fix call
+  the cap fired at 15 s with no participant yet, and caption content still arrived
+  (`agent.audible`, `turn.response` and persisted turns all fired), so the earlier
+  "empty room yields no caption content" diagnosis is **not reproduced** and remains
+  unproven. In the post-fix call the interviewer appeared after 8.5 s, so the restart path
+  was not exercised on a live call; it is unit-tested only.
+- **Agent audio subscription (not the cause of silence).** The pre-fix call received the
+  candidate's audio published before the agent joined (`Track received … audio` at
+  20:34:39, before `Agent joined call`), and the agent answered in both calls once its
+  Gemini session was live. The earlier silence coincided with the Gemini Live session
+  closing (API error 1008 at 19:35:38) and never being re-established. `SessionWatchdog`
+  now reconnects and closes a reconnect that completes after stop; live reconnection was
+  **not** observed in these calls (no drop occurred).
+- **Agent stayed in the call after completion (fixed).** `agent.finish()` waits for the
+  call to end, which cannot happen while the agent is a participant, so it stayed active
+  after "End Interview" until the service was restarted. The room now calls
+  `POST /api/stream/agent/leave` → `POST /v1/realtime/leave`; live check: 200, agent audio
+  tasks cancelled, `active_calls` empty. One reconnect fired during that teardown (the
+  session drops while leaving); the watchdog now closes such a session instead of reviving
+  it (unit-tested, not re-verified live).
+- **Report job 401 (earlier call).** Completing that interview enqueued `report-j974…-v1`;
+  both attempts failed `401 Unauthorized` from `host.docker.internal:3211/worker/report-start`,
+  i.e. the running worker's `WORKER_SERVICE_KEY` does not match this Convex deployment
+  (config drift, not a code regression). Re-using the same interview on 2026-11-01 shows the
+  old job swept to `failed` (`Job timed out before completion`) on the report page; the page
+  offers Retry. The report pipeline was not exercised again in these calls.
 
 Load target for the release gate: **UNVERIFIED** — `N` concurrent interviews is not yet
 chosen or measured.
@@ -264,7 +326,7 @@ Every debt row in AGENTS.md points at one of these.
 | G-16 | `realtime/instructions.py:38-69` |
 | G-17 | `convex/answers.ts:26-31`; `transcript-recorder.ts:84` |
 | G-18 | `setup/page.tsx:85-94`; `stream-provider.tsx:137-138` |
-| G-19 | **fixed 2026-10-31** — `reportJobs.enqueuedAt`/`startedAt`/`completedAt`; worker `jobTiming` on terminal logs; room `turn.response` logs turn latency (Q9 remains unverified without a live call) |
+| G-19 | **fixed 2026-10-31** — `reportJobs.enqueuedAt`/`startedAt`/`completedAt`; worker `jobTiming` on terminal logs; room `turn.response` logs turn latency (live samples 5335 / 342 / 4640 ms on 2026-11-01) |
 | G-20 | `worker/src/report-processor.ts:59-91,167`; `convex/schema.ts:68-72` |
 | G-21 | `app/layout.tsx:29`; `UserSyncProvider.tsx:40-44` |
 | G-22 | `config.py:36`; `deps.py:11`; `compose.yaml:53,84`; `lib/ai-service.ts:15` |

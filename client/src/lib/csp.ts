@@ -38,11 +38,15 @@ const CLERK_FRAME_ORIGINS = [
   "https://*.protect.clerk.com",
 ];
 
-// Stream's JS SDK talks to `video.stream-io-api.com` (HTTP + WebSocket) and
-// resolves SFU regions through `hint.stream-io-video.com`.
+// Stream's JS SDK talks to `video.stream-io-api.com` (HTTP + WebSocket), then
+// joins a per-call media SFU at `sfu-<region>-<id>.stream-io-video.com` over
+// WebSocket, resolving regions through `hint.stream-io-video.com`.
 const STREAM_ORIGINS = [
   "https://video.stream-io-api.com",
   "wss://video.stream-io-api.com",
+  // Signaling WebSocket plus Twirp (SendStats/SendAnswer/IceTrickle) on the SFU.
+  "wss://*.stream-io-video.com",
+  "https://*.stream-io-video.com",
   "https://hint.stream-io-video.com",
 ];
 

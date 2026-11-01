@@ -20,6 +20,10 @@ import { Button } from "@/components/ui/button";
 import { captureException } from "@/lib/glitchtip";
 import { logRoomTiming, startJoinTiming } from "./room-timing";
 import {
+  startCaptionsWhenPresent,
+  type CaptionSession,
+} from "./room-captions";
+import {
   dispatchInterviewerAgent,
   fetchStreamSession,
   StreamNotConfiguredError,
@@ -100,6 +104,7 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   useEffect(() => {
     let cancelled = false;
     let joinedCall: StreamCallInstance | null = null;
+    let captionSession: CaptionSession | null = null;
 
     async function connect() {
       setState({ status: "loading" });
@@ -128,37 +133,61 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
           return;
         }
 
-        const captionsStartedAt = performance.now();
-        try {
-          await call.startClosedCaptions({ language: "en" });
-        } catch (captionError) {
-          console.warn("Closed captions are unavailable", captionError);
-        }
-        logRoomTiming("room.captions", performance.now() - captionsStartedAt);
-
-        if (!cancelled) {
-          const dispatchStartedAt = performance.now();
-          void dispatchInterviewerAgent(interviewId)
-            .then(() =>
-              logRoomTiming(
-                "room.dispatch",
-                performance.now() - dispatchStartedAt
-              )
+        const dispatchStartedAt = performance.now();
+        void dispatchInterviewerAgent(interviewId)
+          .then(() =>
+            logRoomTiming(
+              "room.dispatch",
+              performance.now() - dispatchStartedAt
             )
-            .catch((agentError) => {
-              console.warn("AI interviewer dispatch failed", agentError);
-              captureException(agentError, {
-                interviewId,
-                scope: "stream-provider",
-                step: "dispatch-interviewer",
-              });
-              toast.warning(
-                "The AI interviewer could not join. You can still continue the interview."
-              );
+          )
+          .catch((agentError) => {
+            console.warn("AI interviewer dispatch failed", agentError);
+            captureException(agentError, {
+              interviewId,
+              scope: "stream-provider",
+              step: "dispatch-interviewer",
             });
-        }
+            toast.warning(
+              "The AI interviewer could not join. You can still continue the interview."
+            );
+          });
 
         setState({ status: "ready", session, client, call });
+
+        // Captions are started once the interviewer is present, then restarted
+        // if it joins late (see room-captions.ts).
+        const captionsStartedAt = performance.now();
+        void startCaptionsWhenPresent(call)
+          .then((session) => {
+            captionSession = session;
+            if (cancelled) {
+              session.dispose();
+              return;
+            }
+            logRoomTiming(
+              "room.captions",
+              performance.now() - captionsStartedAt,
+              {
+                waitedForParticipantMs: Math.round(
+                  session.waitedForParticipantMs
+                ),
+                startedAfterParticipant: session.startedAfterParticipant,
+              }
+            );
+            const restartStartedAt = performance.now();
+            void session.restarted.then((restarted) => {
+              if (restarted) {
+                logRoomTiming(
+                  "room.captions.restart",
+                  performance.now() - restartStartedAt
+                );
+              }
+            });
+          })
+          .catch((captionError) => {
+            console.warn("Closed captions are unavailable", captionError);
+          });
       } catch (error) {
         if (cancelled) return;
         if (error instanceof StreamNotConfiguredError) {
@@ -180,6 +209,7 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
 
     return () => {
       cancelled = true;
+      captionSession?.dispose();
       void joinedCall?.leave().catch(() => {});
     };
   }, [interviewId]);

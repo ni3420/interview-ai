@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   dispatchInterviewerAgent,
   fetchStreamSession,
+  stopInterviewerAgent,
   StreamNotConfiguredError,
   type StreamSession,
 } from "@/features/interview/room/stream-session";
@@ -130,6 +131,39 @@ describe("dispatchInterviewerAgent", () => {
 
     await expect(dispatchInterviewerAgent("interview-1")).rejects.toThrow(
       /GEMINI_API_KEY/
+    );
+  });
+});
+
+describe("stopInterviewerAgent", () => {
+  it("POSTs the interview id with keepalive so navigation cannot cancel it", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(mockResponse({ body: { status: "stopped" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      stopInterviewerAgent("interview-1")
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stream/agent/leave",
+      expect.objectContaining({
+        method: "POST",
+        keepalive: true,
+        body: JSON.stringify({ interviewId: "interview-1" }),
+      })
+    );
+  });
+
+  it("rejects when the agent could not be stopped", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(mockResponse({ ok: false, status: 502 }))
+    );
+
+    await expect(stopInterviewerAgent("interview-1")).rejects.toThrow(
+      /502/
     );
   });
 });

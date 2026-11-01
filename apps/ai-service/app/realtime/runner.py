@@ -9,11 +9,13 @@ this project installs, so the agent must use ``gemini.Realtime``. The LLM used
 for resume plans and reports is configured separately via ``AI_PROVIDER``.
 """
 
+import asyncio
 import logging
 from typing import Any
 
 from app.core.config import settings
 from app.realtime.instructions import build_instructions
+from app.realtime.watchdog import SessionWatchdog
 from app.schemas.realtime import RealtimeJoinRequest
 
 logger = logging.getLogger(__name__)
@@ -98,11 +100,19 @@ async def run_agent(request: RealtimeJoinRequest) -> None:
     )
 
     async with agent.join(call):
-        await agent.simple_response(
-            text="Greet the candidate and ask the first interview question."
+        watchdog = SessionWatchdog(agent.llm, call_id=request.call_id)
+        watchdog_task = asyncio.create_task(
+            watchdog.run(), name=f"realtime-watchdog:{request.call_id}"
         )
-        # finish() waits for the call to end; it does not hang up immediately.
-        await agent.finish()
+        try:
+            await agent.simple_response(
+                text="Greet the candidate and ask the first interview question."
+            )
+            # finish() waits for the call to end; it does not hang up immediately.
+            await agent.finish()
+        finally:
+            watchdog.stop()
+            await asyncio.gather(watchdog_task, return_exceptions=True)
 
     logger.info(
         "AI interviewer left interview call",

@@ -148,14 +148,21 @@ not by an id supplied by the client.
 ### F3 — Live interview (as built)
 
 1. `/interview/[id]` mounts `StreamProvider`: `POST /api/stream/token` (Clerk session →
-   ownership check → participant token), `call.join({ create: true })`, then
-   `startClosedCaptions({ language: "en" })`.
+   ownership check → participant token), `call.join({ create: true })`, then captions via
+   `startCaptionsWhenPresent` (`room-captions.ts`): it waits up to 15 s for a remote
+   participant before `startClosedCaptions({ language: "en" })`, and restarts captions if
+   the interviewer joins after that cap. The restart is a safety net; that no-caption case
+   has not been reproduced live.
 2. `POST /api/stream/agent` runs fire-and-forget: Clerk session → `interviews.getInterview`
    (ownership) → AI service `POST /v1/realtime/join-call` with `call_id =
    interview-${interviewId}`, the job description, the plan's questions and `resumeText`.
    The service starts a vision-agents `Agent` (Gemini Live) in a background task and
-   returns `started | already_running`. The Next route has a 15 s timeout; there is no
-   "agent joined" acknowledgement, so the first question arrives after the model connects.
+   returns `started | already_running`. The vision-agents import runs in the FastAPI
+   lifespan (`~13 s` cold, measured 2026-11-01), so it does not block the first join; the
+   Next route still has a 15 s timeout. There is no "agent joined" acknowledgement, so the
+   first question arrives after the model connects. On "End interview" the room calls
+   `POST /api/stream/agent/leave` so the interviewer leaves the call instead of waiting for
+   it to end.
 3. Instructions are built once at join (`realtime/instructions.py`): base persona + JD +
    numbered plan (capped at 25) + résumé excerpt (capped at 6 000 chars) + an
    untrusted-data note; `@` is rewritten to `(at)` because the instruction container
@@ -165,8 +172,10 @@ not by an id supplied by the client.
    serially calls `answers.saveAnswer`, which upserts on (`interviewId`, `questionIndex`).
    If the interviewer's captions never arrive, answers are stored under a synthetic group
    with no question text (G-17).
-5. "End interview" calls `interviews.updateInterviewStatus(completed)` and navigates to
-   `/interview/[id]/report`. Closing the tab does not end the call or the interview.
+5. "End interview" calls `interviews.updateInterviewStatus(completed)`, tells the
+   interviewer to leave (`POST /api/stream/agent/leave` → `/v1/realtime/leave`; fire-and-forget,
+   non-fatal) and navigates to `/interview/[id]/report`. Closing the tab does not end the
+   call or the interview.
 6. Failure modes: dispatch failure is `toast.warning` only (G-13); there is no agent
    reconnect, no dead-letter record and no server-side retry.
 
