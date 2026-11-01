@@ -14,6 +14,12 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Some suites import `../convex` and `../worker` directly. Node resolution
+      // walks up from those folders, so it never sees this package's install.
+      // Point both at the copies declared in package.json to keep the suite
+      // self-contained on a fresh clone.
+      convex: path.resolve(__dirname, "./node_modules/convex"),
+      zod: path.resolve(__dirname, "./node_modules/zod"),
     },
   },
 });
