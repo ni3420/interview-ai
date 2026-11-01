@@ -89,8 +89,9 @@ not by an id supplied by the client.
 2. **Browser → Next.js.** `client/src/proxy.ts` (Clerk middleware) guards only
    `/dashboard(.*)` and `/interview(.*)`. `/reports` guards itself with a client effect.
    `UserSyncProvider` in the root layout redirects a signed-out visitor to `/sign-in`,
-   except while already on `/sign-in` or `/sign-up` — those two are the surfaces the
-   visitor must reach to fix the problem, so the redirect exempts them (G-21, G-53).
+   except on the public landing page `/` and on `/sign-in` or `/sign-up`. The landing
+   page must stay readable while signed out, and the auth pages are where a refused
+   visitor can act (G-21, G-53).
    A sync refused with `EMAIL_ALREADY_LINKED` is not retried: the provider replaces the
    URL with `/sign-up?reason=email-taken`, `RequireSyncedUser` keeps the protected surface
    closed through the navigation, and the sign-up page reads the query and shows
@@ -258,7 +259,7 @@ not by an id supplied by the client.
 not implemented.
 
 Local: `docker compose up -d qdrant valkey` then `cd client && bun run dev`,
-`cd worker && bun run dev`, `cd apps/ai-service && uv run uvicorn app.main:app`.
+`cd worker && bun run build && bun run start`, `cd apps/ai-service && uv run uvicorn app.main:app`.
 The client and worker read `client/.env.local` and `worker/.env`; the AI service reads
 `apps/ai-service/.env`, where the key is named `SERVICE_API_KEY`, not `AI_SERVICE_API_KEY`.
 

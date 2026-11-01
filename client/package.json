@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "test:e2e:harness": "playwright test test/e2e/room-timing.spec.ts"
+    "test:e2e:harness": "playwright test test/e2e/room-timing.spec.ts",
+    "capture:screenshots": "playwright test --config=playwright.screenshots.config.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.39.7",
