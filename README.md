@@ -1,17 +1,47 @@
-# Interview AI
+<div align="center">
 
-An AI-led mock interview platform. Upload a resume, paste a job description, sit a voice interview with an AI interviewer, and get a rubric-scored report that quotes the evidence it used.
+<h1>Interview AI</h1>
 
-**Status: portfolio project / MVP.** It runs locally end to end. It is not deployed, and it has no billing integration.
+<p><b>An AI interviewer that runs a live voice interview and then scores it against a weighted rubric — quoting the transcript for every point it awards.</b></p>
 
-![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
-![React](https://img.shields.io/badge/React-19-087ea4?logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript)
-![Convex](https://img.shields.io/badge/Convex-backend-f3b01a)
-![FastAPI](https://img.shields.io/badge/FastAPI-Python_3.12-009688?logo=fastapi)
-![Tests](https://img.shields.io/badge/unit_tests-503_passing-brightgreen)
+<p>
+  <a href="#what-to-look-at-first-30-seconds"><b>What to look at first</b></a> ·
+  <a href="#architecture"><b>Architecture</b></a> ·
+  <a href="#running-locally"><b>Run locally</b></a> ·
+  <a href="#tests-and-ci"><b>Tests</b></a> ·
+  <a href="#known-limitations"><b>Limitations</b></a>
+</p>
 
----
+<p>
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js_16-black?style=flat&logo=nextdotjs&logoColor=white">
+  <img alt="React 19" src="https://img.shields.io/badge/React_19-087EA4?style=flat&logo=react&logoColor=white">
+  <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat&logo=typescript&logoColor=white">
+  <img alt="Convex" src="https://img.shields.io/badge/Convex-backend-F3B01A?style=flat&logo=convex&logoColor=black">
+  <img alt="FastAPI, Python 3.12" src="https://img.shields.io/badge/FastAPI-Python_3.12-009688?style=flat&logo=fastapi&logoColor=white">
+  <img alt="503 unit tests passing" src="https://img.shields.io/badge/unit_tests-503_passing-2EA44F?style=flat">
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/landing-desktop-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/landing-desktop.png">
+  <img src="docs/screenshots/landing-desktop.png" alt="Interview AI landing page" width="880">
+</picture>
+
+<sub>Landing page at 1440 × 900, captured from the running app with Playwright. Authenticated screens need a Clerk session and are not included yet.</sub>
+
+<details>
+<summary>Also captured at 390 px</summary>
+
+<br>
+
+<img src="docs/screenshots/landing-mobile.png" alt="Landing page at 390 px" width="390">
+
+</details>
+
+</div>
+
+> [!NOTE]
+> **Status: portfolio project / MVP.** It runs locally end to end. It is not deployed, and it has no billing integration. The live room needs Stream and Gemini credentials; resume processing and reports run on local Ollama by default.
 
 ## What to look at first (30 seconds)
 
@@ -21,20 +51,6 @@ If you are reviewing this as a portfolio piece, these are the parts worth your t
 2. **The service auth scheme** — [`convex/_lib/workerAuth.ts`](convex/_lib/workerAuth.ts), [`worker/src/http.ts`](worker/src/http.ts), [`apps/ai-service/app/api/deps.py`](apps/ai-service/app/api/deps.py). One HMAC canonical string implemented in TypeScript, Node, and Python, with shared test vectors so the three sides cannot drift.
 3. **Scoring that the model cannot fake** — [`apps/ai-service/app/core/rubric.py`](apps/ai-service/app/core/rubric.py) and [`apps/ai-service/app/services/report_evaluation.py`](apps/ai-service/app/services/report_evaluation.py). Weights live in code; the model only supplies per-criterion sub-scores, and the worker re-verifies the result before it is stored.
 4. **The architecture doc** — [`docs/architecture.md`](docs/architecture.md). Every component, table, route, trust boundary, and known failure mode, kept honest against the tree.
-
----
-
-## Screenshots
-
-Captured from the running app with Playwright (`client/test/screenshots/screenshots.spec.ts`). These are the public surfaces; authenticated screens need a Clerk session and are not included yet.
-
-| Landing (desktop) | Landing (dark) |
-| --- | --- |
-| ![Landing page, light theme](docs/screenshots/landing-desktop.png) | ![Landing page, dark theme](docs/screenshots/landing-desktop-dark.png) |
-
-![Landing page at 390 px](docs/screenshots/landing-mobile.png)
-
----
 
 ## What it does
 
@@ -46,8 +62,6 @@ Captured from the running app with Playwright (`client/test/screenshots/screensh
 6. Closed captions become a transcript. Question/answer pairs are persisted as the call runs, so a reload continues where the candidate left off.
 7. On finish, a queued job sends the transcript, resume, and job description to the AI service, which scores every evaluable question against a weighted rubric.
 8. The report shows the overall score, per-question scores, evidence quotes, skill breakdown, strengths, weaknesses, and a development plan. It can be regenerated without losing the previous version.
-
----
 
 ## Features that work today
 
@@ -79,8 +93,6 @@ Captured from the running app with Playwright (`client/test/screenshots/screensh
 **Interface**
 - Light and dark themes, responsive layouts, visible focus rings, and explicit empty states.
 
----
-
 ## Architecture
 
 ```mermaid
@@ -110,8 +122,6 @@ flowchart TD
 | Vector store | `compose.yaml` | Qdrant 1.19 | Resume chunk vectors |
 | Queue backend | `compose.yaml` | Valkey 8 | BullMQ persistence |
 
----
-
 ## How an interview runs
 
 ```
@@ -126,8 +136,6 @@ flowchart TD
 
 The report page starts generation itself once answers or transcript segments exist, then polls `reportJobs`. A failed job waits for an explicit retry instead of looping.
 
----
-
 ## AI and real-time behaviour
 
 **Question planning.** The AI service receives the extracted resume text and the job description and returns a structured plan. The plan is stored on the interview and reused for the live session and the report prompt.
@@ -137,8 +145,6 @@ The report page starts generation itself once answers or transcript segments exi
 **Transcript.** Captions are captured from Stream events. Segments are deduplicated and stored; question/answer pairs are upserted by `(interviewId, questionIndex)`. Writes retry twice, and the UI shows a degraded-persistence warning rather than silently dropping turns.
 
 **Evaluation.** The worker fetches a signed context payload from Convex, sends it to the AI service, and receives a report. The result is rejected unless quotes appear verbatim in the transcript, criterion scores respect rubric weights, skill scores are criterion means, and completion status matches scored coverage. The worker is the last validation boundary.
-
----
 
 ## Security and reliability
 
@@ -153,8 +159,6 @@ These are implemented in the repository, not aspirational:
 - **Private media.** Resumes live in Convex storage and are served through short-lived URLs. Stream tokens are minted server-side.
 - **Bounded retries.** BullMQ retries jobs; terminal failures are recorded on the job document so the UI can show them.
 - **Stale jobs are not successes.** Convex refuses a completion that would overwrite a newer report version.
-
----
 
 ## Tech stack
 
@@ -171,8 +175,6 @@ These are implemented in the repository, not aspirational:
 | Vectors | Qdrant |
 | Tests | Vitest + Testing Library, Bun test, pytest, Playwright |
 
----
-
 ## Repository layout
 
 ```
@@ -185,8 +187,6 @@ interview-ai/
 ├── compose.yaml            Qdrant, Valkey, AI service, worker
 └── .github/workflows/ci.yml
 ```
-
----
 
 ## Running locally
 
@@ -249,11 +249,17 @@ cp .env.example .env.local
 bun run dev
 ```
 
-Open `http://localhost:3000`. Use `localhost`, not `127.0.0.1`: Clerk only allows origins configured on the instance.
+Open `http://localhost:3000`.
 
-### Environment variables
+> [!TIP]
+> Use `localhost`, not `127.0.0.1`: Clerk only allows origins configured on the instance.
 
-Names and purposes only. Never commit values, and never give a server key a `NEXT_PUBLIC_` prefix.
+<details>
+<summary><b>Environment variables (names only)</b></summary>
+
+<br>
+
+Never commit values, and never give a server key a `NEXT_PUBLIC_` prefix.
 
 **Client (`client/.env.local`)**
 
@@ -293,7 +299,7 @@ Names and purposes only. Never commit values, and never give a server key a `NEX
 | `REPORT_AI_REQUEST_TIMEOUT_MS` | Upper bound for a local evaluation call |
 | `WORKER_CONCURRENCY`, `REPORT_WORKER_CONCURRENCY` | Queue concurrency |
 
----
+</details>
 
 ## Tests and CI
 
@@ -313,8 +319,6 @@ Lint is only partially gated. `bun run lint` reports 0 errors and 9 warnings; Py
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs the client tests, both typechecks, the production build, the E2E harness, the worker suite, and the AI suite. CI status is not claimed here — check the Actions tab of the repository you are reading.
 
----
-
 ## Known limitations
 
 - **No billing.** The pricing section is UI copy. No payment provider is integrated and plan limits are not enforced.
@@ -328,8 +332,6 @@ Lint is only partially gated. `bun run lint` reports 0 errors and 9 warnings; Py
 - **No deployment.** There is no hosted demo or demo account.
 - **Screenshots cover public pages only** and must be re-captured after the planned UI redesign.
 
----
-
 ## Roadmap
 
 1. Remove the placeholder dashboard widgets and dead navigation links.
@@ -338,8 +340,6 @@ Lint is only partially gated. `bun run lint` reports 0 errors and 9 warnings; Py
 4. Add an authenticated Playwright journey (sign in → interview → report).
 5. Deploy with a hosted model provider and document the cost per interview.
 6. Support multiple resumes and shareable report links.
-
----
 
 ## Documentation
 
