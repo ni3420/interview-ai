@@ -309,7 +309,7 @@ Measured on this tree on 2026-11-01:
 | --- | --- | --- |
 | Client unit | `cd client && bun run test` | 306 passed in 29 files |
 | Client types | `cd client && bunx tsc --noEmit` | clean |
-| Convex types | `cd client && bunx tsc -p ../convex/tsconfig.json --noEmit` | clean |
+| Convex types | `cd client && bunx tsc -p ../convex/tsconfig.json --noEmit --typeRoots ./node_modules/@types` | clean |
 | Worker | `cd worker && bun test` | 48 passed |
 | Worker types | `cd worker && bun run typecheck` | clean |
 | AI service | `cd apps/ai-service && uv run pytest -q` | 149 passed, 1 skipped |
