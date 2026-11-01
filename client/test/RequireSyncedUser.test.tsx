@@ -283,6 +283,22 @@ describe("RequireSyncedUser", () => {
     expect(screen.getByText(/redirecting you to sign in/i)).toBeInTheDocument();
   });
 
+  it("leaves a signed-out visitor on the public landing page", () => {
+    mocks.pathname = "/";
+    mocks.useUser.mockReturnValue({ isLoaded: true, isSignedIn: false, user: null });
+    mocks.useQuery.mockReturnValue(undefined);
+    mocks.useMutation.mockReturnValue(vi.fn());
+
+    render(
+      <UserSyncProvider>
+        <p>Marketing content</p>
+      </UserSyncProvider>
+    );
+
+    expect(screen.getByText("Marketing content")).toBeInTheDocument();
+    expect(mocks.router.push).not.toHaveBeenCalled();
+  });
+
   it("shows nothing but a pending state while Clerk is still loading", () => {
     renderProtected(undefined, { isLoaded: false, isSignedIn: false });
 

@@ -96,14 +96,16 @@ export default function UserSyncProvider({
   // image backfilled.
   const identityHasLanded = syncState === "unsynced" || syncState === "synced";
 
-  // The sign-in and sign-up surfaces are the only places an unmirrored or
-  // refused visitor can act, so the auto-redirect never fights them.
-  const isAuthPage = pathname === "/sign-in" || pathname === "/sign-up";
+  // Public surfaces stay readable while signed out: the marketing page is the
+  // first thing a visitor sees, and the auth pages are where a refused visitor
+  // can act. App routes are already gated by the server-side proxy.
+  const isPublicPage =
+    pathname === "/" || pathname === "/sign-in" || pathname === "/sign-up";
 
   useEffect(() => {
-    if (!isLoaded || isSignedIn || isAuthPage) return;
+    if (!isLoaded || isSignedIn || isPublicPage) return;
     router.push("/sign-in");
-  }, [isLoaded, isSignedIn, isAuthPage, router]);
+  }, [isLoaded, isSignedIn, isPublicPage, router]);
 
   // A taken address is not a transient failure — retrying cannot free it — so
   // leave the protected surface and explain it on the page that can act.
