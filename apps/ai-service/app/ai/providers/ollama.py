@@ -1,17 +1,45 @@
+from __future__ import annotations
+
+from time import perf_counter
+
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from app.ai.providers.base import (
+    BaseChatProvider,
+    ChatRequest,
+    ChatResponse,
+    ProviderCapabilities,
+    TokenUsage,
+)
+from app.ai.providers.registry import registry
 from app.core.config import settings
 from app.core.metrics import record_usage
 
 
-class OllamaProvider:
+class OllamaProvider(BaseChatProvider):
     """Local model inference through Ollama.
 
-    Kept behind the same ``generate(prompt) -> str`` interface as the Gemini
-    provider so business logic never depends on a specific model. Ollama is
-    only contacted when this provider is actually invoked.
+    Kept behind the same normalized interface as every other provider so
+    business logic never depends on a specific model. Ollama is only contacted
+    when this provider is actually invoked.
     """
+
+    name = "ollama"
+    capabilities = ProviderCapabilities(
+        temperature=True,
+        max_tokens=True,
+        seed=True,
+        json_mode=False,
+        streaming=False,
+    )
+
+    @property
+    def model(self) -> str:
+        return settings.ollama_model
+
+    async def is_configured(self) -> bool:
+        return bool(settings.ollama_base_url.strip())
 
     async def is_available(self) -> bool:
         """Whether Ollama is reachable and the configured model is installed.
@@ -41,26 +69,22 @@ class OllamaProvider:
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
     )
-    async def generate(
-        self,
-        prompt: str,
-        *,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        seed: int | None = None,
-    ) -> str:
+    async def complete(self, request: ChatRequest) -> ChatResponse:
+        started = perf_counter()
         options: dict[str, object] = {
             "temperature": (
                 settings.ollama_temperature
-                if temperature is None
-                else temperature
+                if request.temperature is None
+                else request.temperature
             ),
             "num_predict": (
-                settings.ollama_max_tokens if max_tokens is None else max_tokens
+                settings.ollama_max_tokens
+                if request.max_tokens is None
+                else request.max_tokens
             ),
         }
-        if seed is not None:
-            options["seed"] = seed
+        if request.seed is not None:
+            options["seed"] = request.seed
 
         async with httpx.AsyncClient(
             base_url=settings.ollama_base_url, timeout=settings.ollama_timeout_seconds
@@ -68,8 +92,8 @@ class OllamaProvider:
             response = await client.post(
                 "/api/generate",
                 json={
-                    "model": settings.ollama_model,
-                    "prompt": prompt,
+                    "model": self.model,
+                    "prompt": request.prompt,
                     "stream": False,
                     "options": options,
                 },
@@ -81,13 +105,24 @@ class OllamaProvider:
         if not text:
             raise ValueError("Empty response from Ollama")
 
+        prompt_tokens = data.get("prompt_eval_count")
+        completion_tokens = data.get("eval_count")
         record_usage(
-            provider="ollama",
-            model=settings.ollama_model,
-            prompt_tokens=data.get("prompt_eval_count"),
-            completion_tokens=data.get("eval_count"),
+            provider=self.name,
+            model=self.model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
-        return text
+        return ChatResponse(
+            text=text,
+            provider=self.name,
+            model=self.model,
+            usage=TokenUsage(
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+            ),
+            latency_ms=round((perf_counter() - started) * 1000, 1),
+        )
 
 
-ollama_provider = OllamaProvider()
+registry.register("ollama", OllamaProvider)

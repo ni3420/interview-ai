@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -29,13 +31,44 @@ class Settings(BaseSettings):
     gemini_input_price_per_1m: float | None = None
     gemini_output_price_per_1m: float | None = None
 
-    # Model provider selection. "gemini" is the optional remote provider;
-    # "ollama" uses local inference so the service works without cloud keys.
-    ai_provider: str = "gemini"
+    # TokenHarbor exposes an OpenAI-compatible /chat/completions endpoint.
+    # The free DeepSeek model is the default chat provider; configure a key
+    # here or in the process environment.
+    tokenharbor_api_key: str = ""
+    tokenharbor_base_url: str = "https://tokenharbor.ai/v1"
+    tokenharbor_model: str = "deepseek-v4.1-flash:free"
+    tokenharbor_temperature: float = 0.7
+    # DeepSeek reasons before answering and both phases share this budget.
+    # 2048 could be consumed by reasoning alone, returning empty content, so
+    # leave room for the reasoning phase plus the actual answer.
+    tokenharbor_max_tokens: int = 8192
+    tokenharbor_timeout_seconds: float = 120.0
+    # Optional USD per 1M tokens for usage-log cost estimates. Leave unset
+    # (or 0 for a free model) rather than inventing a price.
+    tokenharbor_input_price_per_1m: float | None = None
+    tokenharbor_output_price_per_1m: float | None = None
+
+    # Provider selection. Names must be registered in app.ai.providers.
+    # "gemini" is the optional remote provider; "ollama" uses local inference;
+    # "tokenharbor" is the OpenAI-compatible DeepSeek endpoint above.
+    ai_provider: str = "tokenharbor"
     # When the primary provider is unavailable (quota, 5xx, timeout) and this
-    # local provider has the configured model installed, continue on it.
-    # Set to an empty string to disable the fallback.
-    ai_fallback_provider: str = "ollama"
+    # fallback is actually reachable, continue on it. Set to an empty string
+    # to disable the fallback in specific mode.
+    ai_fallback_provider: str = ""
+    # specific = AI_PROVIDER (+ optional fallback)
+    # any      = first configured, healthy provider from the candidate order
+    # all      = every configured provider; normalized results are batched
+    ai_provider_mode: Literal["specific", "any", "all"] = "specific"
+    # Comma-separated candidate order for any/all. Empty means every
+    # registered provider in registration order (primary first).
+    ai_provider_order: str = ""
+    # Bound each provider call in any/all routing. 0 keeps each adapter's own
+    # timeout (Ollama's local inference budget is intentionally large).
+    ai_provider_timeout_seconds: float = 0.0
+    # Cache health probes so any-mode requests do not re-probe on every call.
+    ai_health_check_ttl_seconds: float = 30.0
+    ai_health_check_timeout_seconds: float = 3.0
     ollama_model: str = "llama3.2:1b"
     ollama_temperature: float = 0.7
     # Bound generation so slow local CPU inference still completes in time.

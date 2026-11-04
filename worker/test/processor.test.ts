@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { isTerminalFailure } from "../src/processor";
+import { HttpError } from "../src/http";
+import {
+  isPermanentModelResponseError,
+  isTerminalFailure,
+} from "../src/processor";
 
 type Probe = Parameters<typeof isTerminalFailure>[0];
 
@@ -22,6 +26,40 @@ function probe(
     opts: attempts === null ? {} : { attempts },
   } as unknown as Probe;
 }
+
+describe("isPermanentModelResponseError", () => {
+  const planUrl = "http://ai-service:8000/v1/interviews/plan";
+
+  it("treats an empty model response as permanent", () => {
+    const body = JSON.stringify({
+      detail: { code: "empty_response", message: "tokenharbor: no usable text" },
+    });
+
+    expect(
+      isPermanentModelResponseError(new HttpError(502, body, planUrl))
+    ).toBe(true);
+  });
+
+  it("keeps transient and unrelated failures retryable", () => {
+    // A 500 is an availability failure; BullMQ should still retry it.
+    expect(
+      isPermanentModelResponseError(new HttpError(500, "{}", planUrl))
+    ).toBe(false);
+    // A 502 with a different code is not the empty-response contract.
+    expect(
+      isPermanentModelResponseError(
+        new HttpError(502, JSON.stringify({ detail: { code: "timeout" } }), planUrl)
+      )
+    ).toBe(false);
+    expect(isPermanentModelResponseError(new Error("boom"))).toBe(false);
+  });
+
+  it("ignores a 502 with an unparseable body", () => {
+    expect(
+      isPermanentModelResponseError(new HttpError(502, "<html>", planUrl))
+    ).toBe(false);
+  });
+});
 
 describe("isTerminalFailure", () => {
   it("treats a job with another attempt scheduled as non-terminal", async () => {

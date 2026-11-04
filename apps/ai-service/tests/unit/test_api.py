@@ -3,6 +3,7 @@ from httpx import AsyncClient, ASGITransport
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 from app.main import app
+from app.ai.providers.base import ProviderResponseError
 from app.schemas.interview import (
     InterviewPlanResponse,
     NextQuestionResponse,
@@ -25,6 +26,7 @@ def patch_llm():
     with patch("app.api.v1.interviews.get_llm_provider", return_value=provider):
         yield provider.generate
 
+
 SAMPLE_RESUME = "Software engineer with 5 years experience in React, Node.js, TypeScript. Built scalable web applications. Led team of 4 developers."
 SAMPLE_JD = "Senior Frontend Engineer role. Requirements: React, TypeScript, Next.js, GraphQL, 5+ years experience. Responsible for building user-facing features."
 
@@ -44,7 +46,9 @@ class TestInterviewPlanEndpoint:
         with patch_llm() as mock_generate:
             mock_generate.return_value = '{"questions": ["Describe a complex React project you\'ve built.", "How do you handle state management in large applications?", "Explain your experience with TypeScript generics."], "focus_areas": ["React", "TypeScript", "State Management"]}'
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/plan",
                     headers=HEADERS,
@@ -85,7 +89,9 @@ class TestInterviewPlanEndpoint:
         with patch_llm() as mock_generate:
             mock_generate.side_effect = Exception("Gemini API error")
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/plan",
                     headers=HEADERS,
@@ -93,6 +99,27 @@ class TestInterviewPlanEndpoint:
                 )
 
         assert response.status_code == 500
+
+    @pytest.mark.asyncio
+    async def test_generate_plan_empty_model_response_is_502(self):
+        with patch_llm() as mock_generate:
+            mock_generate.side_effect = ProviderResponseError(
+                "returned no usable text (finish_reason='length')",
+                provider="tokenharbor",
+                code="empty_response",
+            )
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/v1/interviews/plan",
+                    headers=HEADERS,
+                    json={"resume_text": SAMPLE_RESUME, "job_description": SAMPLE_JD},
+                )
+
+        assert response.status_code == 502
+        assert response.json()["detail"]["code"] == "empty_response"
 
 
 class TestNextQuestionEndpoint:
@@ -107,7 +134,9 @@ class TestNextQuestionEndpoint:
         with patch_llm() as mock_generate:
             mock_generate.return_value = '{"question": "Can you elaborate on the specific React hooks you used?", "is_follow_up": true, "follow_up_count": 1}'
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/next-question",
                     headers=HEADERS,
@@ -138,7 +167,9 @@ class TestNextQuestionEndpoint:
         with patch_llm() as mock_generate:
             mock_generate.return_value = '{"question": "How do you handle state management in large applications?", "is_follow_up": false, "follow_up_count": 0}'
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/next-question",
                     headers=HEADERS,
@@ -160,9 +191,13 @@ class TestNextQuestionEndpoint:
     @pytest.mark.asyncio
     async def test_next_question_max_follow_ups(self):
         with patch_llm() as mock_generate:
-            mock_generate.return_value = '{"question": "Next topic question", "is_follow_up": false, "follow_up_count": 0}'
+            mock_generate.return_value = (
+                '{"question": "Next topic question", "is_follow_up": false, "follow_up_count": 0}'
+            )
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/next-question",
                     headers=HEADERS,
@@ -184,7 +219,11 @@ class TestEvaluationEndpoint:
     async def test_evaluate_interview_success(self):
         mock_response = {
             "overall_score": 85,
-            "strengths": ["Strong technical knowledge", "Clear communication", "Good problem-solving"],
+            "strengths": [
+                "Strong technical knowledge",
+                "Clear communication",
+                "Good problem-solving",
+            ],
             "weaknesses": ["Could improve on system design", "Limited experience with GraphQL"],
             "recommendations": ["Study system design patterns", "Build a GraphQL project"],
             "question_scores": [
@@ -197,7 +236,9 @@ class TestEvaluationEndpoint:
         with patch_llm() as mock_generate:
             mock_generate.return_value = str(mock_response).replace("'", '"')
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/evaluate",
                     headers=HEADERS,
@@ -258,7 +299,9 @@ class TestEvaluationEndpoint:
         with patch_llm() as mock_generate:
             mock_generate.side_effect = Exception("Gemini API error")
 
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
                 response = await client.post(
                     "/v1/interviews/evaluate",
                     headers=HEADERS,

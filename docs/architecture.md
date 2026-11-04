@@ -36,7 +36,7 @@ Next.js (3000)
   │                                   │           │ X-Worker-Key (service auth)
   │                                   │           └── Worker (BullMQ, 2 queues)
   │                                   │                   │
-  ├── /api/ai/[...path] (allowlist) ──┼──────────► FastAPI (8000) ──► Ollama / Gemini
+  ├── /api/ai/[...path] (allowlist) ──┼──────────► FastAPI (8000) ──► TokenHarbor / Ollama / Gemini
   │      X-API-Key                    │                   │
   │                                   │                   └──► Qdrant (6333)
   ├── /api/resume/process ────────────┼── enqueue ──► Valkey (6379)
@@ -222,7 +222,7 @@ not by an id supplied by the client.
 
 | Failure | Current behaviour |
 |---|---|
-| AI provider down or model missing | Provider factory falls back (`AI_FALLBACK_PROVIDER`, default Ollama); errors surface as 502/504 from the proxy |
+| AI provider down or model missing | `specific` mode falls back to `AI_FALLBACK_PROVIDER`; `any` mode skips unhealthy providers; `all` mode returns partial results and raises only when every provider fails. Errors surface as 502/504 from the proxy |
 | AI generation exceeds budget | Proxy aborts at 900 s, returns 504 |
 | Worker crash mid-job | BullMQ retries; terminal failure path marks the record failed |
 | Convex worker endpoints unconfigured | 401 (fail closed) |
@@ -232,6 +232,26 @@ not by an id supplied by the client.
 | Stream token expires mid-interview | 3600 s validity; a 60-minute session cannot reconnect after the token lapses (G-26) |
 | Non-PDF bytes uploaded with a PDF name/MIME | Accepted; extraction fails later with 422 and the résumé is marked failed (G-24) |
 | Sentry | **No `Sentry.init`/`withSentryConfig` anywhere.** `lib/glitchtip.ts` wraps five call sites but events are dropped |
+
+### Provider selection (as built, 2026-11-04)
+
+`apps/ai-service/app/ai/providers/` is the only place that knows provider names:
+
+| Module | Responsibility |
+|---|---|
+| `base.py` | `ChatRequest`/`ChatResponse`, capability metadata, `BaseChatProvider`, normalized failures |
+| `registry.py` | name → adapter factory, lazy singleton instances |
+| `routing.py` | health TTL cache, `any` selection, concurrent `all` fan-out, per-call timeout |
+| `factory.py` | env-driven mode/order validation, specific-mode fallback, log fields |
+| `openai_compatible.py` | shared `/chat/completions` adapter; `tokenharbor` is the default chat provider (`deepseek-v4.1-flash:free`) |
+
+Controllers and report services call `get_llm_provider()` and never import a vendor module.
+Current chat adapters are `tokenharbor`, `gemini` and `ollama`; embeddings
+(`app/services/embeddings.py`) and the realtime Gemini Live agent remain separate
+capabilities because they do not share the chat interface. `all` mode returns normalized
+successes plus per-provider failures; single-response workflows use the first successful
+response in candidate order. The OpenAI-compatible adapter uses `httpx`, not a vendor SDK,
+so another compatible gateway only needs settings and a one-line registration.
 
 ## 8. Environment
 
@@ -243,7 +263,13 @@ not by an id supplied by the client.
 | `AI_SERVICE_API_KEY` | client proxy, worker | yes |
 | `SERVICE_API_KEY` | AI service | yes — compose maps `AI_SERVICE_API_KEY` onto this name |
 | `STREAM_API_KEY`, `STREAM_API_SECRET` | client + AI service | for live interviews |
-| `AI_PROVIDER`, `AI_FALLBACK_PROVIDER`, `OLLAMA_*`, `GEMINI_API_KEY`, `GEMINI_MODEL` | AI service | provider-dependent |
+| `AI_PROVIDER`, `AI_FALLBACK_PROVIDER` | AI service | primary/fallback names |
+| `AI_PROVIDER_MODE`, `AI_PROVIDER_ORDER` | AI service | `specific`/`any`/`all`; any/all candidate order |
+| `AI_PROVIDER_TIMEOUT_SECONDS`, `AI_HEALTH_CHECK_TTL_SECONDS`, `AI_HEALTH_CHECK_TIMEOUT_SECONDS` | AI service | routing bounds; defaults are safe |
+| `TOKENHARBOR_API_KEY` | AI service | yes for the default `tokenharbor` provider |
+| `TOKENHARBOR_BASE_URL`, `TOKENHARBOR_MODEL`, `TOKENHARBOR_TEMPERATURE`, `TOKENHARBOR_MAX_TOKENS`, `TOKENHARBOR_TIMEOUT_SECONDS` | AI service | optional (defaults exist) |
+| `TOKENHARBOR_INPUT_PRICE_PER_1M`, `TOKENHARBOR_OUTPUT_PRICE_PER_1M` | AI service | optional; unset logs `estimatedCostUsd: null` |
+| `OLLAMA_*`, `GEMINI_API_KEY`, `GEMINI_MODEL` | AI service | provider-dependent |
 | `REALTIME_MODEL`, `REALTIME_MAX_QUESTIONS`, `REALTIME_MAX_RESUME_CHARS` | AI service | for live interviews |
 | `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION` | AI service | yes |
 | `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `EMBEDDING_CONFIG_VERSION` | AI service | yes |

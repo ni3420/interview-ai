@@ -61,10 +61,14 @@ services:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
-      # Local development uses Ollama (no cloud key required). Set
-      # AI_PROVIDER=gemini plus GEMINI_API_KEY to use the remote provider.
-      AI_PROVIDER: ${AI_PROVIDER:-ollama}
-      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-ollama}
+      # Chat responses come from TokenHarbor by default. TOKENHARBOR_API_KEY
+      # must be set in one of the env_file entries above; it is deliberately
+      # not listed here so an empty default cannot mask it. Set
+      # AI_FALLBACK_PROVIDER=ollama to keep local inference as a fallback.
+      AI_PROVIDER: ${AI_PROVIDER:-tokenharbor}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_PROVIDER_MODE: ${AI_PROVIDER_MODE:-specific}
+      AI_PROVIDER_ORDER: ${AI_PROVIDER_ORDER:-}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
       # Realtime vision agent. Secrets (STREAM_API_KEY, STREAM_API_SECRET,
       # GEMINI_API_KEY) come from env_file above; only non-secret overrides go

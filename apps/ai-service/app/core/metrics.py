@@ -83,10 +83,15 @@ def estimated_cost_usd(
     """
     if provider == "ollama":
         return 0.0
-    if provider != "gemini":
+    if provider == "gemini":
+        input_price = settings.gemini_input_price_per_1m
+        output_price = settings.gemini_output_price_per_1m
+    elif provider == "tokenharbor":
+        input_price = settings.tokenharbor_input_price_per_1m
+        output_price = settings.tokenharbor_output_price_per_1m
+    else:
         return None
-    input_price = settings.gemini_input_price_per_1m
-    output_price = settings.gemini_output_price_per_1m
+
     if (
         input_price is None
         or output_price is None

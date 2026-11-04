@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai.providers.factory import validate_provider_config
 from app.api.v1 import interviews, realtime, resumes
 from app.core.config import settings
 from app.realtime.runner import (
@@ -24,6 +25,7 @@ async def lifespan(_app: FastAPI):
     blocked the event loop long enough that the Next.js dispatcher hit its 15s
     timeout and reported a failed dispatch while the agent actually joined.
     """
+    validate_provider_config()
     try:
         await asyncio.to_thread(ensure_available)
     except RealtimeRuntimeUnavailableError as exc:

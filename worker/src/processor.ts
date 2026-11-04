@@ -1,6 +1,6 @@
 import { UnrecoverableError, type Job } from "bullmq";
 import { config } from "./config";
-import { postSignedJson } from "./http";
+import { HttpError, postSignedJson } from "./http";
 import { resumeJobSchema, type ResumeJob } from "./job";
 import { logEvent, logStage, queueWaitMs } from "./log";
 
@@ -60,6 +60,27 @@ export async function isTerminalFailure(job: FailureProbe): Promise<boolean> {
     return !RETRY_STATES.has(state);
   } catch {
     return job.attemptsMade >= (job.opts.attempts ?? 1);
+  }
+}
+
+/**
+ * Detects a permanent empty model response from the AI service.
+ *
+ * The service answers 502 with `code: "empty_response"` when the model returned
+ * no usable text. Re-sending the same prompt only burns tokens, so the message
+ * must be surfaced as unrecoverable instead of spending the retry budget.
+ */
+export function isPermanentModelResponseError(error: unknown): boolean {
+  if (!(error instanceof HttpError) || error.status !== 502) {
+    return false;
+  }
+  try {
+    const body = JSON.parse(error.body) as {
+      detail?: { code?: string };
+    };
+    return body.detail?.code === "empty_response";
+  } catch {
+    return false;
   }
 }
 
@@ -244,6 +265,12 @@ export async function processResumeJob(job: Job): Promise<ResumeProcessResult> {
         }`
       )
       .catch(() => undefined);
+    if (isPermanentModelResponseError(error)) {
+      // Same prompt, same empty answer: fail now instead of exhausting retries.
+      throw new UnrecoverableError(
+        error instanceof Error ? error.message : String(error)
+      );
+    }
     throw error;
   }
 }
