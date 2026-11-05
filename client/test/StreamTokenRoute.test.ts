@@ -7,6 +7,7 @@ process.env.STREAM_API_SECRET = "stream-secret";
 const mocks = vi.hoisted(() => ({
   auth: vi.fn(),
   currentUser: vi.fn(),
+  getToken: vi.fn(),
   setAuth: vi.fn(),
   query: vi.fn(),
   mutation: vi.fn(),
@@ -37,6 +38,7 @@ vi.mock("@stream-io/node-sdk", () => ({
 type RouteHandler = (request: unknown) => Promise<Response>;
 
 let POST: RouteHandler;
+let StreamClientMock: ReturnType<typeof vi.fn>;
 
 function jsonRequest(body: unknown) {
   return { json: async () => body };
@@ -46,13 +48,18 @@ beforeAll(async () => {
   ({ POST } = (await import("@/app/api/stream/token/route")) as unknown as {
     POST: RouteHandler;
   });
+  const sdk = (await import("@stream-io/node-sdk")) as unknown as {
+    StreamClient: ReturnType<typeof vi.fn>;
+  };
+  StreamClientMock = sdk.StreamClient;
 });
 
 beforeEach(() => {
   mocks.auth.mockResolvedValue({
     userId: "clerk-user-1",
-    getToken: vi.fn().mockResolvedValue("convex-token"),
+    getToken: mocks.getToken,
   });
+  mocks.getToken.mockResolvedValue("convex-token");
   mocks.currentUser.mockResolvedValue({
     fullName: null,
     firstName: "Ada",
@@ -132,5 +139,78 @@ describe("POST /api/stream/token", () => {
       token: "stream-token",
       callId: "interview-interview-1",
     });
+  });
+
+  it("passes a Stream timeout longer than the SDK's 3s default", async () => {
+    await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(StreamClientMock.mock.calls[0]?.[2]).toEqual({ timeout: 10_000 });
+  });
+
+  it("retries a transient Clerk token failure and still issues the token", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.getToken
+        .mockRejectedValueOnce(new Error("fetch failed"))
+        .mockResolvedValue("convex-token");
+
+      const pending = POST(jsonRequest({ interviewId: "interview-1" }));
+      await vi.advanceTimersByTimeAsync(5_000);
+      const response = await pending;
+
+      expect(response.status).toBe(200);
+      expect(mocks.getToken).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("returns a typed 502 when Clerk keeps failing, without charging the budget", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.getToken.mockRejectedValue(new Error("fetch failed"));
+
+      const pending = POST(jsonRequest({ interviewId: "interview-1" }));
+      await vi.advanceTimersByTimeAsync(5_000);
+      const response = await pending;
+      const body = (await response.json()) as { error?: string };
+
+      expect(response.status).toBe(502);
+      expect(body.error).toBe("auth_service_unavailable");
+      expect(mocks.getToken).toHaveBeenCalledTimes(3);
+      expect(mocks.mutation).not.toHaveBeenCalled();
+      expect(mocks.getOrCreate).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries Stream's get-or-create, which is idempotent per call id", async () => {
+    mocks.getOrCreate
+      .mockRejectedValueOnce(new Error("aborted after 3000ms"))
+      .mockResolvedValue({});
+
+    const response = await POST(jsonRequest({ interviewId: "interview-1" }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.getOrCreate).toHaveBeenCalledTimes(2);
+    expect(mocks.generateUserToken).toHaveBeenCalledTimes(1);
+  });
+
+  it("degrades to the fallback name when the Clerk profile lookup fails", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.currentUser.mockRejectedValue(new Error("fetch failed"));
+
+      const pending = POST(jsonRequest({ interviewId: "interview-1" }));
+      await vi.advanceTimersByTimeAsync(5_000);
+      const response = await pending;
+      const body = (await response.json()) as { user?: { name?: string } };
+
+      expect(response.status).toBe(200);
+      expect(body.user?.name).toBe("Candidate");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

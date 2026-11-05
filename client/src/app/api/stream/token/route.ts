@@ -11,6 +11,33 @@ export const runtime = "nodejs";
 const CALL_TYPE = "default";
 const TOKEN_VALIDITY_SECONDS = 60 * 60;
 
+/** Stream's SDK default is 3000 ms, which a cold `next dev` compile can blow. */
+const STREAM_TIMEOUT_MS = 10_000;
+
+/** Mirrors the room's answer-write policy: two retries survive a short blip. */
+const UPSTREAM_RETRY_DELAYS_MS = [400, 1200];
+
+/**
+ * Retries an idempotent upstream read.
+ *
+ * Only used for calls that are safe to repeat: Clerk token/profile lookups and
+ * Stream's get-or-create, which is keyed by a stable call id.
+ */
+async function withRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= UPSTREAM_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const delay = UPSTREAM_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined) break;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
 // Issues a short-lived Stream video token for the authenticated owner of an
 // interview. The Stream API secret never leaves the server.
 export async function POST(request: NextRequest) {
@@ -50,7 +77,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const convexToken = await getToken({ template: "convex" });
+  // A Clerk API failure throws rather than returning null, so it is caught here
+  // instead of surfacing as an unhandled 500 the room cannot explain.
+  let convexToken: string | null;
+  try {
+    convexToken = await withRetry(() => getToken({ template: "convex" }));
+  } catch (error) {
+    console.error("Failed to read the Convex token from Clerk", error);
+    return NextResponse.json(
+      { error: "auth_service_unavailable" },
+      { status: 502 }
+    );
+  }
   if (!convexToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -76,23 +114,32 @@ export async function POST(request: NextRequest) {
   const denied = await enforceQuota(convex, "stream_token");
   if (denied) return denied;
 
-  const user = await currentUser();
+  // The profile only supplies the display name, so a Clerk failure degrades to
+  // the fallback name rather than ending the interview attempt.
+  let user: Awaited<ReturnType<typeof currentUser>> = null;
+  try {
+    user = await withRetry(currentUser);
+  } catch (error) {
+    console.error("Failed to read the candidate profile from Clerk", error);
+  }
   const streamUser = {
     id: userId,
     name: user?.fullName ?? user?.firstName ?? "Candidate",
     image: user?.imageUrl,
   };
 
-  const stream = new StreamClient(apiKey, secret);
+  const stream = new StreamClient(apiKey, secret, { timeout: STREAM_TIMEOUT_MS });
   const callId = `interview-${interviewId}`;
 
   try {
-    await stream.video.call(CALL_TYPE, callId).getOrCreate({
-      data: {
-        created_by_id: streamUser.id,
-        members: [{ user_id: streamUser.id, role: "admin" }],
-      },
-    });
+    await withRetry(() =>
+      stream.video.call(CALL_TYPE, callId).getOrCreate({
+        data: {
+          created_by_id: streamUser.id,
+          members: [{ user_id: streamUser.id, role: "admin" }],
+        },
+      })
+    );
   } catch (error) {
     console.error("Failed to create Stream call", error);
     return NextResponse.json(
