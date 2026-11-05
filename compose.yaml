@@ -3,7 +3,8 @@ name: interview-ai
 # Local development stack:
 #   - Qdrant  : vector store for resume chunks + embeddings (used by ai-service)
 #   - Valkey  : Redis-compatible BullMQ backend (resume-processing queue)
-#   - ai-service : Python/FastAPI service (LangChain + Ollama embeddings -> Qdrant)
+#   - ai-service : Python/FastAPI service (LangChain embeddings -> Qdrant;
+#                  embeddings come from local Ollama or a Cloudflare Worker)
 #   - worker  : Node BullMQ consumer that drives resume processing
 #
 # Quick start:  docker compose up -d qdrant valkey
@@ -57,10 +58,15 @@ services:
       # default secret. Set AI_SERVICE_API_KEY in the root .env file.
       SERVICE_API_KEY: ${AI_SERVICE_API_KEY:?AI_SERVICE_API_KEY must be set in .env}
       QDRANT_URL: http://qdrant:6333
-      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-resume_chunks}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
-      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-ollama}
+      # Embedding selection (EMBEDDING_PROVIDER, EMBEDDING_MODEL,
+      # EMBEDDING_DIMENSION, EMBEDDING_CONFIG_VERSION, QDRANT_COLLECTION and the
+      # EMBEDDING_WORKER_* settings) comes from the env_file entries above and
+      # never from a ${VAR:-default} here: an empty or defaulted entry in this
+      # block would mask whatever is set in apps/ai-service/.env, and the
+      # collection name must move with the config version or the two disagree.
+      # See app/services/embeddings.py; ollama stays the code default so the
+      # stack runs offline with no worker configured.
       # Chat responses come from TokenHarbor by default. TOKENHARBOR_API_KEY
       # must be set in one of the env_file entries above; it is deliberately
       # not listed here so an empty default cannot mask it. Set

@@ -95,16 +95,29 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
 
     # --- Resume processing / vector retrieval ---------------------------------
-    # Embeddings are produced locally by Ollama and stored in Qdrant through
+    # Embeddings come either from local Ollama or from a deployed Cloudflare
+    # Worker that proxies Workers AI, and are stored in Qdrant through
     # LangChain. The model + dimension are part of the stored metadata so that
     # vectors from incompatible models are never mixed.
     ollama_base_url: str = "http://localhost:11434"
-    # Development uses local Ollama embeddings; no cloud key is required.
-    # Adding a remote provider requires a new config version and a re-index.
+    # Ollama stays the default so tests and offline development need no cloud
+    # key. EMBEDDING_PROVIDER=cloudflare requires the worker settings below.
+    # Changing provider, model, dimension or version requires a re-index into a
+    # new collection: same-dimension vectors are not interchangeable.
     embedding_provider: str = "ollama"
     embedding_model: str = "nomic-embed-text"
     embedding_dimension: int = 768
     embedding_config_version: str = "v1"
+
+    # Remote embedding worker: the deployed URL of the Cloudflare Worker and
+    # the bearer secret it compares against ``env.API_SECRET``. There is no
+    # default secret; an unconfigured deployment fails fast instead of silently
+    # falling back to local inference.
+    embedding_worker_url: str = ""
+    embedding_worker_api_key: str = ""
+    embedding_worker_timeout_seconds: float = 30.0
+    # Chunks per request. The Worker forwards the array to one AI.run call.
+    embedding_worker_batch_size: int = 32
 
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""

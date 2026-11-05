@@ -248,7 +248,13 @@ not by an id supplied by the client.
 Controllers and report services call `get_llm_provider()` and never import a vendor module.
 Current chat adapters are `tokenharbor`, `gemini` and `ollama`; embeddings
 (`app/services/embeddings.py`) and the realtime Gemini Live agent remain separate
-capabilities because they do not share the chat interface. `all` mode returns normalized
+capabilities because they do not share the chat interface. Embeddings resolve to
+`ollama` (default, offline) or `cloudflare`
+(`app/services/cloudflare_worker_embeddings.py`), which calls a deployed Cloudflare
+Worker running `@cf/baai/bge-base-en-v1.5`; both satisfy LangChain's `Embeddings`
+interface, so `app/repositories/vector_store.py` is provider-agnostic and the Worker
+holds the Cloudflare `AI` binding instead of this service holding an account token.
+`all` mode returns normalized
 successes plus per-provider failures; single-response workflows use the first successful
 response in candidate order. The OpenAI-compatible adapter uses `httpx`, not a vendor SDK,
 so another compatible gateway only needs settings and a one-line registration.
@@ -272,7 +278,9 @@ so another compatible gateway only needs settings and a one-line registration.
 | `OLLAMA_*`, `GEMINI_API_KEY`, `GEMINI_MODEL` | AI service | provider-dependent |
 | `REALTIME_MODEL`, `REALTIME_MAX_QUESTIONS`, `REALTIME_MAX_RESUME_CHARS` | AI service | for live interviews |
 | `QDRANT_URL`, `QDRANT_API_KEY`, `QDRANT_COLLECTION` | AI service | yes |
-| `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `EMBEDDING_CONFIG_VERSION` | AI service | yes |
+| `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`, `EMBEDDING_DIMENSION`, `EMBEDDING_CONFIG_VERSION` | AI service | yes — the four must move together; changing any one requires a new `QDRANT_COLLECTION` and a full re-index |
+| `EMBEDDING_WORKER_URL`, `EMBEDDING_WORKER_API_KEY` | AI service | only when `EMBEDDING_PROVIDER=cloudflare`; the key must equal the Worker's `API_SECRET` |
+| `EMBEDDING_WORKER_BATCH_SIZE`, `EMBEDDING_WORKER_TIMEOUT_SECONDS` | AI service | optional; chunks per request and the per-request HTTP budget |
 | `REDIS_URL` | client producer + worker | yes |
 | `RESUME_QUEUE_NAME`, `REPORT_QUEUE_NAME` | client producer, worker | optional (defaults exist) |
 | `REPORT_AI_REQUEST_TIMEOUT_MS` | worker | optional |
