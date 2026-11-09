@@ -51,6 +51,13 @@ class TestBuildInstructions:
         assert "Question 24" in instructions
         assert "Question 25" not in instructions
 
+    def test_forbids_combined_questions_per_turn(self):
+        # Without an explicit per-turn rule the speech-to-speech agent reads
+        # several plan items in one utterance.
+        instructions = build_instructions(SAMPLE)
+        assert "exactly one question per turn" in instructions
+        assert "never merge two numbered questions" in instructions
+
     def test_handles_missing_context(self):
         request = RealtimeJoinRequest(call_id="c")
         instructions = build_instructions(request)

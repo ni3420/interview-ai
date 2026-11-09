@@ -14,6 +14,11 @@ Generate 5-7 interview questions that:
 4. Progress from foundational to advanced topics
 5. Are specific to this role and candidate
 
+Every entry in "questions" must be exactly ONE question: a single sentence ending in
+a single question mark, asking for one thing. Never chain requests with "and", "also",
+"plus" or "while", and never put two question marks in one entry. If a topic deserves
+two questions, make them two separate entries instead of one combined question.
+
 Return ONLY a JSON object with this structure:
 {{
   "questions": ["question 1", "question 2", ...],

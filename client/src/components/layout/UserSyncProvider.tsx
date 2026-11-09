@@ -14,8 +14,12 @@ import { useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useRouter, usePathname } from "next/navigation";
+import { AppBootSkeleton } from "./AppBootSkeleton";
 
 type SyncStatus = "loading" | "synced" | "signed_out" | "error";
+
+/** The part of the handshake currently in flight, so the UI can name it. */
+type SyncStage = "clerk" | "identity" | "profile";
 
 /** Why the sync failed, so a degraded state can name its real cause (D19). */
 type SyncFailure = "email_taken" | "sync_failed";
@@ -30,12 +34,14 @@ export const EMAIL_IN_USE_TARGET = "/sign-up?reason=email-taken";
 
 interface UserSyncState {
   status: SyncStatus;
+  stage: SyncStage;
   failure: SyncFailure | null;
   retry: () => void;
 }
 
 const UserSyncContext = createContext<UserSyncState>({
   status: "loading",
+  stage: "clerk",
   failure: null,
   retry: () => {},
 });
@@ -130,14 +136,28 @@ export default function UserSyncProvider({
   else if (syncState === "unsynced" && failure) status = "error";
   else status = "loading";
 
-  const value = useMemo(() => ({ status, failure, retry }), [status, failure, retry]);
+  const stage: SyncStage = !isLoaded
+    ? "clerk"
+    : !identityHasLanded
+      ? "identity"
+      : "profile";
+
+  const value = useMemo(
+    () => ({ status, stage, failure, retry }),
+    [status, stage, failure, retry]
+  );
 
   if (!isLoaded) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    );
+    // Marketing and auth pages must paint immediately; only protected routes
+    // need the shell-shaped boot state while Clerk resolves.
+    if (isPublicPage) {
+      return (
+        <UserSyncContext.Provider value={value}>
+          {children}
+        </UserSyncContext.Provider>
+      );
+    }
+    return <AppBootSkeleton />;
   }
 
   return (

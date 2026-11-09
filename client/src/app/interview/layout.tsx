@@ -1,10 +1,17 @@
 import { Suspense } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ContentSkeleton } from "@/components/layout/AppBootSkeleton";
 
 export default function InterviewLayout({ children }: { children: React.ReactNode }) {
   return (
     <DashboardLayout>
-      <Suspense fallback={<div className="flex h-64 items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+      <Suspense
+        fallback={
+          <div className="flex flex-1 flex-col">
+            <ContentSkeleton />
+          </div>
+        }
+      >
         {children}
       </Suspense>
     </DashboardLayout>

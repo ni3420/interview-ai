@@ -3,25 +3,38 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
+type BadgeVariant =
+  | "default"
+  | "secondary"
+  | "neutral"
+  | "outline"
+  | "success"
+  | "warning"
+  | "info"
+  | "destructive";
+
 interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "default" | "secondary" | "destructive" | "outline" | "success";
+  variant?: BadgeVariant;
 }
+
+const variants: Record<BadgeVariant, string> = {
+  default: "border-transparent bg-primary text-primary-foreground",
+  secondary: "border-transparent bg-secondary text-secondary-foreground",
+  neutral: "border-transparent bg-muted text-muted-foreground",
+  outline: "border-border text-foreground",
+  success: "border-transparent bg-success/10 text-success",
+  warning: "border-transparent bg-warning/10 text-warning",
+  info: "border-transparent bg-info/10 text-info",
+  destructive: "border-transparent bg-destructive/10 text-destructive",
+};
 
 const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
   ({ className, variant = "default", ...props }, ref) => {
-    const variants = {
-      default: "border-transparent bg-primary text-primary-foreground hover:bg-primary/80",
-      secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-      destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
-      outline: "text-foreground",
-      success: "border-transparent bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
-    };
-
     return (
       <span
         ref={ref}
         className={cn(
-          "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium leading-5",
           variants[variant],
           className
         )}
@@ -32,4 +45,4 @@ const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
 );
 Badge.displayName = "Badge";
 
-export { Badge };
+export { Badge, type BadgeProps, type BadgeVariant };

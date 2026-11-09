@@ -7,11 +7,8 @@ import { useUser } from "@clerk/nextjs";
 import {
   BarChart3,
   ChevronLeft,
-  FileText,
-  History,
   LayoutDashboard,
-  Settings,
-  Sparkles,
+  Plus,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -26,10 +23,8 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Interviews", href: "/interview/setup", icon: FileText },
+  { name: "New interview", href: "/interview/setup", icon: Plus },
   { name: "Reports", href: "/reports", icon: BarChart3 },
-  { name: "History", href: "/history", icon: History },
-  { name: "Settings", href: "/settings", icon: Settings },
 ];
 
 export interface RecentProject {
@@ -69,52 +64,52 @@ export function Sidebar({
     };
   }, [isOpen, onClose]);
 
-  const displayName = user?.fullName ?? user?.username ?? "Candidate";
+  const displayName = user?.fullName ?? user?.username ?? "Team member";
   const initial = displayName.charAt(0).toUpperCase();
 
   return (
     <>
-      {/* Mobile Backdrop Overlay (Clicking anywhere outside closes the sidebar) */}
       {isOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm transition-opacity lg:hidden"
+          className="fixed inset-0 z-40 bg-foreground/40 transition-opacity lg:hidden"
           onClick={onClose}
           aria-hidden="true"
         />
       )}
 
-      {/* Main Sidebar Container */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-md transition-all duration-300 dark:border-slate-800/80 dark:bg-slate-900/95 lg:static lg:z-auto",
-          isOpen ? "translate-x-0 w-64" : "-translate-x-full lg:translate-x-0",
-          collapsed ? "lg:w-[72px]" : "lg:w-64",
+          "fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width,transform] duration-200 ease-out-quart lg:static lg:z-auto",
+          isOpen ? "w-64 translate-x-0" : "-translate-x-full lg:translate-x-0",
+          collapsed ? "lg:w-[68px]" : "lg:w-64",
           className
         )}
       >
-        {/* Brand Header */}
-        <div className="flex h-16 items-center justify-between border-b border-slate-100 px-4 dark:border-slate-800/60">
+        <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-3">
           <Link
             href="/dashboard"
             onClick={onClose}
-            className="flex items-center gap-2.5 overflow-hidden font-bold"
+            className="flex min-w-0 items-center gap-2.5"
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm shadow-primary/20">
-              <Sparkles className="h-5 w-5" aria-hidden="true" />
+            <span
+              aria-hidden="true"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent font-mono text-[11px] font-semibold tracking-tight text-sidebar-accent-foreground"
+            >
+              IA
             </span>
             {(!collapsed || isOpen) && (
-              <span className="truncate text-base tracking-tight text-slate-900 dark:text-slate-100">
-                InterviewAI
+              <span className="truncate text-sm font-semibold tracking-tight">
+                Interview AI
               </span>
             )}
           </Link>
 
-          {/* Desktop Collapse Arrow Toggle */}
           <button
             type="button"
             onClick={() => setCollapsed((value) => !value)}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="hidden rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:block"
+            aria-expanded={!collapsed}
+            className="hidden rounded-md p-1.5 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:block"
           >
             <ChevronLeft
               className={cn("h-4 w-4 transition-transform duration-200", collapsed && "rotate-180")}
@@ -122,103 +117,99 @@ export function Sidebar({
             />
           </button>
 
-          {/* Mobile Close (Cross) Button */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:hidden"
+            className="rounded-md p-1.5 text-sidebar-muted transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:hidden"
           >
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
         </div>
 
-        {/* Navigation Links */}
-        <nav className="flex flex-1 flex-col gap-1.5 px-3 py-4">
+        <nav aria-label="Main" className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
           {navigation.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             return (
               <Link
-                key={item.name}
+                key={item.href}
                 href={item.href}
                 onClick={onClose}
+                aria-current={isActive ? "page" : undefined}
                 title={collapsed && !isOpen ? item.name : undefined}
                 className={cn(
-                  "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  "relative flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors duration-150",
                   isActive
-                    ? "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground font-semibold"
-                    : "text-slate-600 hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100",
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                   collapsed && !isOpen && "lg:justify-center lg:px-0"
                 )}
               >
-                <item.icon
-                  className={cn(
-                    "h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-105",
-                    isActive ? "text-primary" : "text-slate-500 dark:text-slate-400"
-                  )}
-                  aria-hidden="true"
-                />
-                {(!collapsed || isOpen) && <span className="truncate">{item.name}</span>}
-                {isActive && (!collapsed || isOpen) && (
-                  <span className="absolute right-2 h-1.5 w-1.5 rounded-full bg-primary" />
+                {isActive && !collapsed && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-primary"
+                  />
                 )}
+                <item.icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+                {(!collapsed || isOpen) && <span className="truncate">{item.name}</span>}
               </Link>
             );
           })}
 
           {(!collapsed || isOpen) && recentProjects.length > 0 && (
-            <div className="mt-6 space-y-1">
-              <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Recent Sessions
+            <div className="mt-5">
+              <p className="px-2.5 pb-1.5 text-micro font-medium uppercase text-sidebar-muted">
+                Recent interviews
               </p>
               {recentProjects.slice(0, 4).map((project) => (
                 <Link
                   key={project.id}
                   href={`/interview/${project.id}/review`}
                   onClick={onClose}
-                  className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-100/80 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+                  className="flex flex-col gap-0.5 rounded-md px-2.5 py-2 transition-colors hover:bg-sidebar-accent"
                 >
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-primary/60" />
-                  <span className="flex flex-col overflow-hidden">
-                    <span className="truncate text-xs font-medium">{project.title}</span>
-                    {project.subtitle && (
-                      <span className="truncate text-[10px] text-slate-400">
-                        {project.subtitle}
-                      </span>
-                    )}
+                  <span className="truncate text-caption font-medium text-sidebar-foreground">
+                    {project.title}
                   </span>
+                  {project.subtitle && (
+                    <span className="truncate text-micro text-sidebar-muted">
+                      {project.subtitle}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
           )}
         </nav>
 
-        {/* User Footer Profile */}
-        <div className="border-t border-slate-200/80 p-3 dark:border-slate-800/80">
+        <div className="border-t border-sidebar-border p-2">
           <div
             className={cn(
-              "flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-slate-100/60 dark:hover:bg-slate-800/50",
+              "flex items-center gap-2.5 rounded-md p-1.5",
               collapsed && !isOpen && "lg:justify-center lg:px-0"
             )}
           >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-700 shadow-inner dark:bg-slate-800 dark:text-slate-200">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-semibold text-sidebar-accent-foreground">
               {initial}
             </span>
             {(!collapsed || isOpen) && (
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-xs font-semibold text-slate-900 dark:text-slate-100">
+                <span className="truncate text-caption font-medium text-sidebar-foreground">
                   {displayName}
                 </span>
-                <span className="truncate text-[11px] text-slate-400">
-                  {user?.primaryEmailAddress?.emailAddress ?? "Candidate"}
+                <span className="truncate text-micro text-sidebar-muted">
+                  {user?.primaryEmailAddress?.emailAddress ?? "Signed in"}
                 </span>
               </span>
             )}
           </div>
           {(!collapsed || isOpen) && (
-            <div className="mt-2 flex items-center justify-between px-2 pt-1">
-              <span className="text-xs font-medium text-slate-400">Theme</span>
+            <div className="mt-1 flex items-center justify-between px-1.5 py-1">
+              <span className="text-micro font-medium uppercase text-sidebar-muted">
+                Theme
+              </span>
               <ThemeToggle />
             </div>
           )}

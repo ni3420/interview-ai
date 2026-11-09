@@ -63,6 +63,27 @@ class TestInterviewPlanEndpoint:
         assert isinstance(data["focus_areas"], list)
 
     @pytest.mark.asyncio
+    async def test_generate_plan_prompt_forbids_combined_questions(self):
+        # A plan entry that bundles two asks makes the live interviewer ask
+        # combined questions, so the constraint must reach the model.
+        with patch_llm() as mock_generate:
+            mock_generate.return_value = '{"questions": ["How do you handle state?"], "focus_areas": ["React"]}'
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                response = await client.post(
+                    "/v1/interviews/plan",
+                    headers=HEADERS,
+                    json={"resume_text": SAMPLE_RESUME, "job_description": SAMPLE_JD},
+                )
+
+        assert response.status_code == 200
+        prompt = mock_generate.await_args.args[0]
+        assert "exactly ONE question" in prompt
+        assert "two question marks" in prompt
+
+    @pytest.mark.asyncio
     async def test_generate_plan_unauthorized(self):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
