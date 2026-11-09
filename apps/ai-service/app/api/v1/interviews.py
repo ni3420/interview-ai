@@ -39,6 +39,21 @@ def parse_json_response(response: str) -> dict:
         raise ValueError("Invalid JSON response from AI")
 
 
+# The live interviewer reads each plan entry as one turn, so an entry that asks
+# more than one thing is spoken as a combined question.
+MAX_PLAN_QUESTION_WORDS = 25
+
+
+def compound_plan_questions(questions: list[str]) -> list[str]:
+    """Return plan entries that ask more than one thing."""
+    return [
+        question
+        for question in questions
+        if question.count("?") > 1
+        or len(question.split()) > MAX_PLAN_QUESTION_WORDS
+    ]
+
+
 @router.post(
     "/plan",
     response_model=InterviewPlanResponse,
@@ -66,6 +81,33 @@ async def generate_interview_plan(request: InterviewPlanRequest):
         ):
             response = await get_llm_provider().generate(prompt)
         data = parse_json_response(response)
+        violations = compound_plan_questions(
+            [q for q in data.get("questions", []) if isinstance(q, str)]
+        )
+        if violations:
+            logging.warning(
+                "Plan contained compound questions; regenerating once",
+                extra={"questionCount": len(violations)},
+            )
+            corrective_prompt = (
+                prompt
+                + "\n\nYour previous answer broke the one-ask rule for these "
+                "entries:\n"
+                + "\n".join(f"- {question}" for question in violations)
+                + "\nReturn the full corrected JSON with every entry as ONE "
+                "atomic question of at most 20 words."
+            )
+            with (
+                usage_context("plan", interview_id=request.interview_id),
+                timed(
+                    "llm.generate",
+                    conversation="plan_retry",
+                    **provider_log_fields(),
+                    promptChars=len(corrective_prompt),
+                ),
+            ):
+                response = await get_llm_provider().generate(corrective_prompt)
+            data = parse_json_response(response)
         return InterviewPlanResponse(
             questions=data.get("questions", []),
             focus_areas=data.get("focus_areas", []),

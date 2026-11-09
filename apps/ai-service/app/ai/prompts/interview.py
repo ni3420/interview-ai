@@ -14,10 +14,18 @@ Generate 5-7 interview questions that:
 4. Progress from foundational to advanced topics
 5. Are specific to this role and candidate
 
-Every entry in "questions" must be exactly ONE question: a single sentence ending in
-a single question mark, asking for one thing. Never chain requests with "and", "also",
-"plus" or "while", and never put two question marks in one entry. If a topic deserves
-two questions, make them two separate entries instead of one combined question.
+Every entry in "questions" must be exactly ONE question, atomic and about ONE
+topic:
+- One sentence, at most 20 words.
+- Exactly one question mark, at the end; never two question marks.
+- Never chain asks with "and", "also", "plus", "while", "including", or a
+  comma-separated list of things to cover.
+- Never ask for an example, trade-offs, tools and metrics in the same entry.
+- If a topic needs several asks, ask only the first one here; the live
+  interviewer asks follow-ups during the conversation.
+
+Good: "How do you split server and client components in a Next.js App Router page?"
+Bad: "Walk me through your Next.js app: routing, components, data fetching, state management, and trade-offs."
 
 Return ONLY a JSON object with this structure:
 {{
@@ -48,6 +56,9 @@ Guidelines:
 - If the answer was solid → move to next planned topic (is_follow_up: false)
 - Max 3 follow-ups per question before moving on
 - Follow-ups should reference specifics from the candidate's answer
+- The follow-up must be ONE atomic question about ONE topic: at most 20 words,
+  exactly one question mark, and no chained asks with "and", "also", "plus",
+  "while", "including" or a comma-separated list
 
 Return ONLY a JSON object:
 {{
