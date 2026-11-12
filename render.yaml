@@ -1,0 +1,140 @@
+# Render Blueprint for Interview AI.
+#
+# Deploys the four container services that compose.yaml runs locally, plus the
+# Next.js client, into one Render region so they can reach each other over the
+# internal network by service name:
+#
+#   client -> ai-service  : client/src/lib/service-auth.ts calls
+#                           AI_SERVICE_URL for question plans and reports.
+#   worker -> ai-service  : BullMQ jobs post to AI_SERVICE_URL.
+#   worker -> valkey      : BullMQ queue backend (REDIS_URL).
+#   ai-service -> qdrant  : vector store for resume chunks (QDRANT_URL).
+#
+# Convex stays on Convex cloud (npx convex deploy), not on Render.
+#
+# Secrets are declared with sync:false and must be filled in once from the
+# Render Dashboard (or the API); they are never stored in this file.
+
+services:
+  # ── AI service (FastAPI): plans, report evaluation, resume ingestion ──────
+  - type: web
+    name: interview-ai-service
+    runtime: docker
+    dockerfilePath: apps/ai-service/Dockerfile
+    dockerContext: apps/ai-service
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      # Shared secret the worker (and client) use to authenticate to this
+      # service. Must equal AI_SERVICE_API_KEY on the worker and client.
+      - key: SERVICE_API_KEY
+        sync: false
+      - key: QDRANT_URL
+        value: http://qdrant:6333
+      # Local Ollama does not exist in the cloud: embeddings come from the
+      # Cloudflare embedding worker, text generation from TokenHarbor.
+      - key: EMBEDDING_PROVIDER
+        value: cloudflare
+      - key: EMBEDDING_WORKER_URL
+        sync: false
+      - key: EMBEDDING_WORKER_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: tokenharbor
+      - key: TOKENHARBOR_API_KEY
+        sync: false
+      - key: TOKENHARBOR_BASE_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: STREAM_API_KEY
+        sync: false
+      - key: STREAM_API_SECRET
+        sync: false
+      # Public origin of the Next.js client; set after the first client deploy.
+      - key: CORS_ORIGINS
+        sync: false
+
+  # ── BullMQ worker: resume processing + report evaluation queues ───────────
+  - type: worker
+    name: interview-ai-worker
+    runtime: docker
+    dockerfilePath: Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - key: REDIS_URL
+        value: redis://valkey:6379
+      - key: AI_SERVICE_URL
+        value: http://interview-ai-service:8000
+      - key: AI_SERVICE_API_KEY
+        sync: false
+      - key: WORKER_SERVICE_KEY
+        sync: false
+      # Convex HTTP actions endpoint for this deployment.
+      - key: CONVEX_SITE_URL
+        sync: false
+
+  # ── Qdrant vector store (internal only, persistent disk) ──────────────────
+  - type: pserv
+    name: qdrant
+    runtime: image
+    image:
+      url: docker.io/qdrant/qdrant:v1.19.2
+    plan: starter
+    disk:
+      name: qdrant-storage
+      mountPath: /qdrant/storage
+      sizeGB: 1
+
+  # ── Valkey 8 (BullMQ backend, internal only, persistent disk) ─────────────
+  - type: pserv
+    name: valkey
+    runtime: image
+    image:
+      url: docker.io/valkey/valkey:8-alpine
+    dockerCommand: ["valkey-server", "--appendonly", "yes"]
+    plan: starter
+    disk:
+      name: valkey-data
+      mountPath: /data
+      sizeGB: 1
+
+  # ── Next.js client ─────────────────────────────────────────────────────────
+  - type: web
+    name: interview-ai-client
+    runtime: node
+    rootDir: client
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      # Convex cloud deployment URL (from `npx convex deploy`).
+      - key: NEXT_PUBLIC_CONVEX_URL
+        sync: false
+      - key: CONVEX_SITE_URL
+        sync: false
+      - key: AI_SERVICE_API_KEY
+        sync: false
+      - key: REDIS_URL
+        value: redis://valkey:6379
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: CLERK_WEBHOOK_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: /sign-in
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: /sign-up
+      - key: STREAM_API_KEY
+        sync: false
+      - key: STREAM_API_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_STREAM_API_KEY
+        sync: false
+      - key: AI_SERVICE_URL
+        value: http://interview-ai-service:8000

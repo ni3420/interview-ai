@@ -18,7 +18,9 @@ RUN apt-get update \
 # INSTALL_REALTIME pulls the heavier vision-agents stack (Gemini Live + WebRTC).
 COPY pyproject.toml ./
 COPY app ./app
-ARG INSTALL_REALTIME=false
+# Render has no blueprint build-args surface, so the default enables the
+# realtime stack (Gemini Live + WebRTC). Compose overrides it explicitly.
+ARG INSTALL_REALTIME=true
 RUN pip install --upgrade pip \
     && if [ "$INSTALL_REALTIME" = "true" ]; then pip install ".[realtime]"; else pip install .; fi
 
