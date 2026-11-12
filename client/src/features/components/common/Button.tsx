@@ -22,11 +22,11 @@ const variantStyles: Record<ButtonVariant, string> = {
   primary:
     "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 focus-visible:ring-primary",
   secondary:
-    "bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-ring dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
+    "bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-ring",
   outline:
-    "border border-slate-200 bg-white text-slate-900 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800",
+    "border border-border bg-transparent text-foreground hover:border-foreground/30 hover:bg-accent focus-visible:ring-ring",
   ghost:
-    "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800",
+    "text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:ring-ring",
 };
 
 const sizeStyles: Record<ButtonSize, string> = {

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Download, FileSpreadsheet, FileText } from "lucide-react";
+import { FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/features/components/common/Button";
 
 export interface DateRange {
@@ -30,6 +30,9 @@ function toCsv(rows: Array<Record<string, string | number>>): string {
   ];
   return lines.join("\n");
 }
+
+const inputClass =
+  "h-9 rounded-md border border-border bg-transparent px-2 text-sm text-foreground outline-none transition-colors focus:border-foreground/40";
 
 export function ExportToolbar({
   range,
@@ -60,12 +63,12 @@ export function ExportToolbar({
   }, [onExportPdf]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 border-y border-border py-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-          Date range
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Range
         </span>
-        <label className="flex items-center gap-2 text-sm text-slate-500">
+        <label>
           <span className="sr-only">From</span>
           <input
             type="date"
@@ -74,11 +77,11 @@ export function ExportToolbar({
             onChange={(event) =>
               onRangeChange({ ...range, from: event.target.value })
             }
-            className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+            className={inputClass}
           />
         </label>
-        <span className="text-slate-400">–</span>
-        <label className="flex items-center gap-2 text-sm text-slate-500">
+        <span className="text-muted-foreground">to</span>
+        <label>
           <span className="sr-only">To</span>
           <input
             type="date"
@@ -87,7 +90,7 @@ export function ExportToolbar({
             onChange={(event) =>
               onRangeChange({ ...range, to: event.target.value })
             }
-            className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
+            className={inputClass}
           />
         </label>
       </div>
@@ -100,7 +103,7 @@ export function ExportToolbar({
           disabled={rows.length === 0}
           leftIcon={<FileSpreadsheet className="h-4 w-4" />}
         >
-          Export CSV
+          CSV
         </Button>
         <Button
           variant="outline"
@@ -108,16 +111,7 @@ export function ExportToolbar({
           onClick={handleExportPdf}
           leftIcon={<FileText className="h-4 w-4" />}
         >
-          Export PDF
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleExportCsv}
-          disabled={rows.length === 0}
-          aria-label="Download report"
-        >
-          <Download className="h-4 w-4" />
+          PDF
         </Button>
       </div>
     </div>

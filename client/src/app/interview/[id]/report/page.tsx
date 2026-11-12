@@ -5,10 +5,8 @@ import { useParams } from "next/navigation";
 import { useQuery } from "convex/react";
 import Link from "next/link";
 import {
-  AlertCircle,
   ArrowLeft,
   Award,
-  ClipboardList,
   Lightbulb,
   Loader2,
   RefreshCw,
@@ -222,11 +220,11 @@ function ScoreMeter({ score, max }: { score: number; max: number }) {
 
   return (
     <div
-      className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+      className="h-1 w-full overflow-hidden bg-muted"
       aria-hidden="true"
     >
       <div
-        className="h-full rounded-full bg-primary"
+        className="h-full bg-signal"
         style={{ width: `${percent}%` }}
       />
     </div>
@@ -270,7 +268,7 @@ function RubricQuestionCard({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Question {question.questionIndex + 1}
             </p>
             <CardTitle className="mt-1 text-base font-semibold leading-snug">
@@ -291,7 +289,7 @@ function RubricQuestionCard({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <section>
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Candidate answer
           </h4>
           {showAnswer ? (
@@ -307,7 +305,7 @@ function RubricQuestionCard({
 
         {showExpected && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Expected answer{" "}
               <span className="font-normal normal-case tracking-normal">
                 ({EXPECTED_SOURCE_LABELS[expectedSource]})
@@ -321,7 +319,7 @@ function RubricQuestionCard({
 
         {question.feedback?.trim() && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Feedback
             </h4>
             <p className="mt-2 leading-relaxed text-foreground">
@@ -332,7 +330,7 @@ function RubricQuestionCard({
 
         {question.strengths && question.strengths.length > 0 && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               What worked
             </h4>
             <TextList items={question.strengths} />
@@ -341,7 +339,7 @@ function RubricQuestionCard({
 
         {question.missingPoints && question.missingPoints.length > 0 && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Missing or incomplete
             </h4>
             <TextList items={question.missingPoints} />
@@ -350,7 +348,7 @@ function RubricQuestionCard({
 
         {question.evidence && question.evidence.length > 0 && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Evidence from your answer
             </h4>
             <ul className="mt-2 space-y-2">
@@ -367,7 +365,7 @@ function RubricQuestionCard({
 
         {question.criteria && question.criteria.length > 0 && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Rubric breakdown
             </h4>
             <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -423,7 +421,7 @@ function LegacyQuestionCard({
       <CardHeader className="pb-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Question {item.questionIndex + 1}
             </p>
             <CardTitle className="mt-1 text-base font-semibold leading-snug">
@@ -439,7 +437,7 @@ function LegacyQuestionCard({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <section>
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
             Candidate answer
           </h4>
           {item.answer.trim().length > 0 ? (
@@ -454,7 +452,7 @@ function LegacyQuestionCard({
         </section>
         {item.feedback?.trim() && (
           <section>
-            <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <h4 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
               Feedback
             </h4>
             <p className="mt-2 leading-relaxed text-foreground">
@@ -582,7 +580,7 @@ export default function InterviewReportPage() {
   if (interview === null) {
     return (
       <div className="container max-w-xl px-4 py-20 text-center">
-        <h1 className="text-xl font-bold text-foreground">Interview Not Found</h1>
+        <h1 className="font-display text-2xl leading-tight tracking-tight text-foreground">Interview Not Found</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           This interview does not exist or you do not have permission to view it.
         </p>
@@ -601,11 +599,14 @@ export default function InterviewReportPage() {
     reportJob === undefined
   ) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
-          <p className="text-xs font-medium text-muted-foreground">
-            Loading interview details...
+          <Loader2
+            className="h-5 w-5 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Loading report
           </p>
         </div>
       </div>
@@ -625,20 +626,24 @@ export default function InterviewReportPage() {
   if (!report) {
     if (isGenerating) {
       return (
-        <div className="flex h-screen flex-col items-center justify-center gap-4 bg-background px-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Loader2 className="h-7 w-7 animate-spin" aria-hidden="true" />
-          </div>
-          <div className="max-w-xs text-center">
-            <h1 className="text-lg font-bold text-foreground">
-              Analyzing Performance
-            </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Evaluating your responses against the target job description...
+        <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4 px-4">
+          <Loader2
+            className="h-5 w-5 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+          <div className="max-w-sm text-center">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+              Report
             </p>
-            <p className="mt-3 text-[11px] text-muted-foreground">
-              This runs in the background and can take several minutes with local
-              models. You can leave this page and come back.
+            <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-foreground">
+              Writing your report
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+              Evaluating each answer against the target role. This runs in the
+              background and can take a few minutes with local models.
+            </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              You can leave this page and come back.
             </p>
           </div>
         </div>
@@ -647,17 +652,19 @@ export default function InterviewReportPage() {
 
     if (error) {
       return (
-        <div className="container max-w-xl px-4 py-20 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-            <AlertCircle className="h-7 w-7" aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-bold text-foreground">
-            Failed to Generate Report
+        <div className="mx-auto max-w-md px-4 py-20 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Failed
+          </p>
+          <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-foreground">
+            Report could not be generated
           </h1>
-          <p className="mt-2 text-xs text-muted-foreground">{error}</p>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+            {error}
+          </p>
           <Button onClick={retry} className="mt-6 gap-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            Retry Generation
+            Try again
           </Button>
         </div>
       );
@@ -665,12 +672,14 @@ export default function InterviewReportPage() {
 
     if (answers.length === 0 && segments.length === 0) {
       return (
-        <div className="container max-w-xl px-4 py-20 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <ClipboardList className="h-7 w-7" aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-bold text-foreground">No report yet</h1>
-          <p className="mt-2 text-xs text-muted-foreground">
+        <div className="mx-auto max-w-md px-4 py-20 text-center">
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Empty
+          </p>
+          <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-foreground">
+            Nothing to report yet
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             This interview has no recorded answers or transcript that can be
             evaluated.
           </p>
@@ -682,8 +691,11 @@ export default function InterviewReportPage() {
     }
 
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2
+          className="h-5 w-5 animate-spin text-muted-foreground"
+          aria-hidden="true"
+        />
       </div>
     );
   }
@@ -712,10 +724,13 @@ export default function InterviewReportPage() {
         <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
           <Link
             href="/dashboard"
-            className="group inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="group inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
           >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Dashboard
+            <ArrowLeft
+              className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
+              aria-hidden="true"
+            />
+            Back to dashboard
           </Link>
           <Button
             variant="outline"
@@ -768,24 +783,27 @@ export default function InterviewReportPage() {
             </div>
           )}
 
-          <Card className="border-border">
-            <CardHeader className="pb-2 text-center">
-              <CardTitle className="text-xl font-bold sm:text-2xl">
-                Performance Report
-              </CardTitle>
-              <CardDescription>
+          <section>
+            <div className="border-b border-border pb-6">
+              <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                Performance report
+              </p>
+              <h1 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-foreground sm:text-5xl">
+                How this session scored
+              </h1>
+              <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
                 {formatDate(interview.createdAt)}
                 {report.version && report.version > 1
-                  ? ` • Revision ${report.version}`
+                  ? ` / revision ${report.version}`
                   : ""}
                 {rubric
                   ? ""
-                  : ` • ${answeredCount}/${totalQuestions} questions recorded`}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center gap-2 py-2">
-                <p className="text-4xl font-extrabold tabular-nums text-foreground">
+                  : ` / ${answeredCount} of ${totalQuestions} questions recorded`}
+              </p>
+            </div>
+            <div>
+              <div className="flex flex-col items-start gap-2 border-b border-border py-6">
+                <p className="font-display text-6xl leading-none tabular-nums tracking-tight text-foreground">
                   {formatScore(report.overallScore, scale)}
                 </p>
                 {typeof report.overallScore === "number" ? (
@@ -800,7 +818,7 @@ export default function InterviewReportPage() {
                 {rubric && counts && counts.evaluated > 0 && (
                   <p
                     data-testid="score-formula"
-                    className="max-w-xl text-center text-xs leading-relaxed text-muted-foreground"
+                    className="max-w-xl text-xs leading-relaxed text-muted-foreground"
                   >
                     Overall score is the mean of the {counts.evaluated} scored{" "}
                     {counts.evaluated === 1 ? "question" : "questions"} (0&ndash;10).
@@ -811,12 +829,12 @@ export default function InterviewReportPage() {
                   <Badge variant="outline">{completion.label}</Badge>
                 )}
                 {completion && (
-                  <p className="max-w-xl text-center text-xs leading-relaxed text-muted-foreground">
+                  <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
                     {completion.description}
                   </p>
                 )}
                 {report.summary?.trim() && (
-                  <p className="mt-2 max-w-2xl text-center text-sm leading-relaxed text-muted-foreground">
+                  <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
                     {report.summary}
                   </p>
                 )}
@@ -827,10 +845,10 @@ export default function InterviewReportPage() {
                   <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                     {COUNT_ROWS.map((row) => (
                       <div key={row.key}>
-                        <dt className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                        <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                           {row.label}
                         </dt>
-                        <dd className="text-lg font-semibold tabular-nums text-foreground">
+                        <dd className="font-display text-2xl tabular-nums text-foreground">
                           {counts[row.key]}
                         </dd>
                       </div>
@@ -846,14 +864,14 @@ export default function InterviewReportPage() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {report.skillScores && (
             <Card className="border-border">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                  <Target className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <CardTitle className="flex items-center gap-2 font-display text-lg">
+                  <Target className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   Skill assessment
                 </CardTitle>
                 <CardDescription>
@@ -885,8 +903,8 @@ export default function InterviewReportPage() {
 
           <Card className="border-border">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Award className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <CardTitle className="flex items-center gap-2 font-display text-lg">
+                <Award className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 Key strengths
               </CardTitle>
               <CardDescription>
@@ -906,8 +924,8 @@ export default function InterviewReportPage() {
 
           <Card className="border-border">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Lightbulb className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <CardTitle className="flex items-center gap-2 font-display text-lg">
+                <Lightbulb className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 Development plan
               </CardTitle>
               <CardDescription>
@@ -916,7 +934,7 @@ export default function InterviewReportPage() {
             </CardHeader>
             <CardContent className="grid gap-6 sm:grid-cols-2">
               <section>
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                   Areas to improve
                 </h3>
                 {report.weaknesses.length > 0 ? (
@@ -928,7 +946,7 @@ export default function InterviewReportPage() {
                 )}
               </section>
               <section>
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <h3 className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
                   Recommended next steps
                 </h3>
                 {report.recommendations.length > 0 ? (
@@ -949,8 +967,8 @@ export default function InterviewReportPage() {
           {report.qualityWarnings && report.qualityWarnings.length > 0 && (
             <Card className="border-border">
               <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                  <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <CardTitle className="flex items-center gap-2 font-display text-lg">
+                  <ShieldAlert className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   Evidence notes
                 </CardTitle>
                 <CardDescription>
@@ -972,7 +990,7 @@ export default function InterviewReportPage() {
             <div className="flex items-baseline justify-between gap-3">
               <h2
                 id="question-review-heading"
-                className="text-lg font-bold text-foreground"
+                className="font-display text-2xl leading-none tracking-tight text-foreground"
               >
                 Question review
               </h2>

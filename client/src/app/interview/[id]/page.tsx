@@ -96,21 +96,32 @@ export default function InterviewPage() {
 
   if (interview === undefined) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2
+          className="h-5 w-5 animate-spin text-muted-foreground"
+          aria-hidden="true"
+        />
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Loading room
+        </p>
       </div>
     );
   }
 
   if (interview === null) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <h1 className="text-2xl font-semibold">Interview not found</h1>
-        <p className="text-muted-foreground">
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Not found
+        </p>
+        <h1 className="font-display text-3xl leading-tight tracking-tight text-foreground">
+          Interview not found
+        </h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
           This interview does not exist or you do not have access to it.
         </p>
         <Button asChild>
-          <Link href="/dashboard">Back to Dashboard</Link>
+          <Link href="/dashboard">Back to dashboard</Link>
         </Button>
       </div>
     );

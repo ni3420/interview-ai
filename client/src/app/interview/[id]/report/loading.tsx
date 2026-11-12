@@ -1,8 +1,10 @@
 export default function ReportLoading() {
   return (
-    <div className="flex h-screen items-center justify-center flex-col gap-4">
-      <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      <p className="text-muted-foreground">Generating your interview report...</p>
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+      <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-foreground" />
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+        Writing report
+      </p>
     </div>
   );
 }

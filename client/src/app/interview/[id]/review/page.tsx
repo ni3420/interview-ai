@@ -5,17 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import {
-  ArrowLeft,
-  BarChart3,
-  CheckCircle2,
-  Loader2,
-  MessageSquare,
-  Sparkles,
-} from "lucide-react";
-import { Card, CardContent } from "@/features/components/common/Card";
+import { ArrowLeft, ArrowUpRight, Loader2 } from "lucide-react";
 import { Badge, type BadgeStatus } from "@/features/components/common/Badge";
-import { Button } from "@/features/components/common/Button";
 import {
   buildQuestionBreakdown,
   formatScore,
@@ -92,10 +83,15 @@ export default function InterviewReviewPage() {
 
   if (interview === undefined || answers === undefined) {
     return (
-      <div className="flex h-[60vh] items-center justify-center bg-white dark:bg-slate-950">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-xs font-medium text-slate-400">Loading interview review...</p>
+          <Loader2
+            className="h-5 w-5 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Loading review
+          </p>
         </div>
       </div>
     );
@@ -103,16 +99,23 @@ export default function InterviewReviewPage() {
 
   if (interview === null) {
     return (
-      <div className="flex h-[60vh] flex-col items-center justify-center gap-4 text-center px-4">
-        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-slate-100">
-          Interview Not Found
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm">
-          This interview session does not exist or you do not have permission to view it.
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Not found
         </p>
-        <Button asChild className="rounded-xl">
-          <Link href="/dashboard">Back to Dashboard</Link>
-        </Button>
+        <h1 className="font-display text-3xl leading-tight tracking-tight text-foreground">
+          Session not found
+        </h1>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          This interview does not exist or you do not have permission to view
+          it.
+        </p>
+        <Link
+          href="/dashboard"
+          className="mt-2 inline-flex h-10 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Back to dashboard
+        </Link>
       </div>
     );
   }
@@ -127,147 +130,169 @@ export default function InterviewReviewPage() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:py-8">
-      {/* Header Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200/80 pb-5 dark:border-slate-800/80">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+      <Link
+        href="/dashboard"
+        className="group inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft
+          className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
+          aria-hidden="true"
+        />
+        Back to dashboard
+      </Link>
+
+      <header className="mt-6 flex flex-wrap items-end justify-between gap-4 border-b border-border pb-8">
         <div>
-          <Link
-            href="/dashboard"
-            className="group mb-2 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-100"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-1" />
-            Back to Dashboard
-          </Link>
-          <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-            Interview Session Review
+          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Session review
+          </p>
+          <h1 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-foreground sm:text-5xl">
+            Interview review
           </h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
             <Badge status={statusBadge[interview.status]} dot>
               {interview.status.replace("_", " ")}
             </Badge>
-            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              {answeredCount} {answeredCount === 1 ? "Question" : "Questions"} Answered
+            <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+              {answeredCount} {answeredCount === 1 ? "answer" : "answers"}
             </span>
           </div>
         </div>
 
         {report && (
-          <Button asChild leftIcon={<BarChart3 className="h-4 w-4" />} className="rounded-xl">
-            <Link href={`/interview/${interviewId}/report`}>
-              View Full Report ({formatScore(report.overallScore, reportScale)})
-            </Link>
-          </Button>
+          <Link
+            href={`/interview/${interviewId}/report`}
+            className="group inline-flex h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium text-foreground transition-colors hover:border-foreground/30"
+          >
+            Full report
+            <span className="font-mono text-xs text-muted-foreground">
+              {formatScore(report.overallScore, reportScale)}
+            </span>
+            <ArrowUpRight
+              className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
+          </Link>
         )}
-      </div>
+      </header>
 
-      {/* Performance Summary */}
       {report && (
-        <Card className="border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/80">
-          <CardContent className="space-y-5 p-4 sm:p-5">
+        <section className="grid gap-8 border-b border-border py-8 sm:grid-cols-[200px_minmax(0,1fr)]">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Overall
+            </p>
+            <p className="mt-2 font-display text-6xl leading-none tracking-tight text-foreground">
+              {formatScore(report.overallScore, reportScale)}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {typeof report.overallScore === "number"
+                ? `${scoreBand(report.overallScore, reportScale)} overall performance`
+                : "No question had enough evidence to score."}
+            </p>
+          </div>
+
+          <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Performance Summary
-              </p>
-              <p className="mt-1 text-3xl font-extrabold tabular-nums text-slate-900 dark:text-slate-100">
-                {formatScore(report.overallScore, reportScale)}
-              </p>
-              <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300 sm:text-sm">
-                {typeof report.overallScore === "number"
-                  ? `${scoreBand(report.overallScore, reportScale)} overall performance`
-                  : "No question had enough evidence to score."}
-              </p>
+              <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                Strengths
+              </h2>
+              {(report.strengths ?? []).length > 0 ? (
+                <ul className="mt-3 space-y-2 text-sm leading-relaxed text-foreground">
+                  {(report.strengths ?? []).map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span
+                        className="mt-2 h-px w-3 shrink-0 bg-success"
+                        aria-hidden="true"
+                      />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No strengths recorded.
+                </p>
+              )}
             </div>
-            <div className="grid gap-5 sm:grid-cols-2">
-              <section>
-                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  Key Strengths
-                </h2>
-                {(report.strengths ?? []).length > 0 ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300 sm:text-sm">
-                    {(report.strengths ?? []).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    No strengths were recorded for this report.
-                  </p>
-                )}
-              </section>
-              <section>
-                <h2 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  Areas to Improve
-                </h2>
-                {(report.weaknesses ?? []).length > 0 ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-slate-700 dark:text-slate-300 sm:text-sm">
-                    {(report.weaknesses ?? []).map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                    No weaknesses were recorded for this report.
-                  </p>
-                )}
-              </section>
+            <div>
+              <h2 className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+                To improve
+              </h2>
+              {(report.weaknesses ?? []).length > 0 ? (
+                <ul className="mt-3 space-y-2 text-sm leading-relaxed text-foreground">
+                  {(report.weaknesses ?? []).map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span
+                        className="mt-2 h-px w-3 shrink-0 bg-warning"
+                        aria-hidden="true"
+                      />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No weaknesses recorded.
+                </p>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       )}
 
-      {/* Target Role Card */}
-      <Card className="border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/80">
-        <CardContent className="p-4 sm:p-5">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            Target Job Description
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-slate-700 dark:text-slate-300 sm:text-sm">
-            {interview.jobDescription}
-          </p>
-        </CardContent>
-      </Card>
+      <section className="border-b border-border py-6">
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+          Target role
+        </p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          {interview.jobDescription}
+        </p>
+      </section>
 
-      {/* Questions & Answers */}
-      {breakdown.length === 0 ? (
-        <Card className="border-slate-200/80 bg-white/80 shadow-sm dark:border-slate-800/80 dark:bg-slate-900/80">
-          <CardContent className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-            <MessageSquare className="h-10 w-10 text-slate-300 dark:text-slate-600" />
-            <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
-              No questions or responses recorded for this interview session.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {breakdown.map((item, index) => {
-            const score =
-              typeof item.score === "number"
-                ? { score: item.score, feedback: item.feedback ?? "" }
-                : undefined;
-            const reportQuestion = reportQuestionByIndex.get(item.questionIndex);
-            const answerVisible =
-              !reportQuestion?.status ||
-              reportQuestion.status === "answered" ||
-              reportQuestion.status === "partial";
-            const percent = score
-              ? reportScale === RUBRIC_SCORE_SCALE
-                ? score.score * 10
-                : score.score
-              : 0;
+      <section className="py-8">
+        <div className="flex items-end justify-between gap-4">
+          <h2 className="font-display text-2xl leading-none tracking-tight text-foreground">
+            Questions and answers
+          </h2>
+          <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+            {answeredCount} total
+          </span>
+        </div>
 
-            return (
-              <Card
-                key={item.questionIndex}
-                className="overflow-hidden border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/90"
-              >
-                <CardContent className="space-y-4 p-5 sm:p-6">
-                  {/* Question Header */}
+        {breakdown.length === 0 ? (
+          <p className="mt-8 border-t border-border pt-6 text-sm text-muted-foreground">
+            No questions or responses were recorded for this session.
+          </p>
+        ) : (
+          <ol className="mt-6 divide-y divide-border border-t border-border">
+            {breakdown.map((item, index) => {
+              const score =
+                typeof item.score === "number"
+                  ? { score: item.score, feedback: item.feedback ?? "" }
+                  : undefined;
+              const reportQuestion = reportQuestionByIndex.get(
+                item.questionIndex
+              );
+              const answerVisible =
+                !reportQuestion?.status ||
+                reportQuestion.status === "answered" ||
+                reportQuestion.status === "partial";
+              const percent = score
+                ? reportScale === RUBRIC_SCORE_SCALE
+                  ? score.score * 10
+                  : score.score
+                : 0;
+
+              return (
+                <li key={item.questionIndex} className="py-6">
                   <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
-                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-xs font-bold text-primary dark:bg-primary/20">
-                        {index + 1}
+                    <div className="flex min-w-0 items-start gap-4">
+                      <span className="mt-0.5 shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Q{String(index + 1).padStart(2, "0")}
                       </span>
-                      <p className="text-sm font-semibold leading-snug text-slate-900 dark:text-slate-100 sm:text-base">
+                      <p className="font-display text-lg leading-snug text-foreground">
                         {item.question}
                       </p>
                     </div>
@@ -286,47 +311,38 @@ export default function InterviewReviewPage() {
                     )}
                   </div>
 
-                  {/* Candidate Answer Section */}
-                  <div className="rounded-xl border border-slate-200/60 bg-slate-50/70 p-4 dark:border-slate-800/60 dark:bg-slate-950/50">
-                    <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                      Candidate Answer
+                  <div className="mt-4 ml-0 border-l-2 border-border pl-4 sm:ml-10">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+                      Your answer
                     </p>
                     {answerVisible && item.answer.trim().length > 0 ? (
-                      <p className="whitespace-pre-wrap text-xs sm:text-sm leading-relaxed text-slate-800 dark:text-slate-200">
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
                         {item.answer}
                       </p>
                     ) : (
-                      <p className="text-xs italic text-slate-400">
+                      <p className="mt-2 text-xs italic text-muted-foreground">
                         {reportQuestion?.notEvaluableReason ??
-                          "No verifiable candidate answer was recorded for this question."}
+                          "No verifiable answer was recorded for this question."}
                       </p>
                     )}
                   </div>
 
-                  {/* AI Feedback Section */}
                   {score?.feedback && (
-                    <div className="flex items-start gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 dark:bg-primary/10">
-                      <Sparkles
-                        className="mt-0.5 h-4 w-4 shrink-0 text-primary"
-                        aria-hidden="true"
-                      />
-                      <div>
-                        <p className="text-[11px] font-bold uppercase tracking-wider text-primary">
-                          AI Feedback & Evaluation
-                        </p>
-                        <p className="mt-1 text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-                          {score.feedback}
-                        </p>
-                      </div>
+                    <div className="mt-4 ml-0 border-l-2 border-signal pl-4 sm:ml-10">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-signal">
+                        Feedback
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-foreground/90">
+                        {score.feedback}
+                      </p>
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </section>
     </div>
   );
 }

@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback } from "react";
 import {
   CallControls,
   SpeakerLayout,
   useCallStateHooks,
 } from "@stream-io/video-react-sdk";
-import { ArrowLeft, CheckCircle, Clock, MessageSquare, Users, Video } from "lucide-react";
+import { CheckCircle, Clock, MessageSquare, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   TranscriptionPanel,
@@ -53,16 +52,15 @@ function RoomHeader({
   const isLow = remainingMs !== null && isTimeRunningLow(remainingMs);
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-gray-800 bg-gray-900/80 px-6 py-3 backdrop-blur">
+    <header className="flex items-center justify-between gap-4 border-b border-neutral-800 bg-neutral-900/80 px-6 py-3 backdrop-blur">
       <div className="flex min-w-0 items-center gap-4">
        
         <div className="min-w-0">
-          <h1 className="flex items-center gap-2 text-lg font-semibold">
-            <Video className="h-5 w-5 text-primary" />
-            AI Live Video Interview
+          <h1 className="font-display text-lg leading-none text-neutral-100">
+            Interview in progress
           </h1>
-          <p className="truncate text-xs text-gray-400">
-            Role: {role || "Software Engineer"}
+          <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-[0.14em] text-neutral-500">
+            {role ? `Role / ${role.slice(0, 80)}` : "Role / Software Engineer"}
           </p>
         </div>
       </div>
@@ -73,22 +71,22 @@ function RoomHeader({
             data-testid="interview-countdown"
             role="timer"
             aria-live="off"
-            className={`flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-xs tabular-nums ${
               isLow
-                ? "border-red-500/40 bg-red-500/10 text-red-400"
-                : "border-gray-700 bg-gray-800 text-gray-200"
+                ? "border-destructive/40 bg-destructive/10 text-destructive"
+                : "border-neutral-700 bg-neutral-800 text-neutral-200"
             }`}
           >
             <Clock className="h-3.5 w-3.5" />
             {formatCountdown(remainingMs)}
           </span>
         )}
-        <span className="hidden items-center gap-1.5 rounded-full border border-gray-700 bg-gray-800 px-3 py-1 text-xs font-medium text-gray-300 sm:flex">
+        <span className="hidden items-center gap-1.5 rounded-md border border-neutral-800 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-neutral-400 sm:flex">
           <Users className="h-3.5 w-3.5" />
           {participantCount} in room
         </span>
-        <span className="hidden items-center gap-1.5 rounded-full border border-green-500/20 bg-green-500/10 px-3 py-1 text-xs font-medium text-green-400 md:flex">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+        <span className="hidden items-center gap-1.5 rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-medium text-success md:flex">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-success" />
           Live
         </span>
         <Button
@@ -135,7 +133,7 @@ export function InterviewRoom({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gray-950 text-white">
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-white">
       <RoomHeader
         role={role}
         onFinish={onFinish}
@@ -147,7 +145,7 @@ export function InterviewRoom({
         <div
           role="status"
           data-testid="persistence-warning"
-          className="border-b border-amber-500/30 bg-amber-500/10 px-6 py-2 text-center text-xs font-medium text-amber-300"
+          className="border-b border-warning/30 bg-warning/10 px-6 py-2 text-center text-xs font-medium text-warning"
         >
           Transcript saving is failing. Recent turns may be missing from your
           report.
@@ -156,21 +154,21 @@ export function InterviewRoom({
 
       <main className="grid flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-[1fr_400px]">
         <div className="flex h-full flex-col gap-4 overflow-hidden">
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 shadow-2xl">
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900 ">
             <SpeakerLayout />
           </div>
-          <div className="flex justify-center rounded-2xl border border-gray-800 bg-gray-900 p-3 shadow-lg">
+          <div className="flex justify-center rounded-lg border border-neutral-800 bg-neutral-900 p-3 ">
             <CallControls onLeave={() => void onFinish()} />
           </div>
         </div>
 
-        <div className="hidden flex-col overflow-hidden rounded-2xl border border-gray-800 bg-gray-900 shadow-xl lg:flex">
-          <div className="flex items-center justify-between border-b border-gray-800 bg-gray-800/50 px-4 py-3">
+        <div className="hidden flex-col overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900  lg:flex">
+          <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-800/50 px-4 py-3">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              <h2 className="text-sm font-semibold">Live Transcript</h2>
+              <MessageSquare className="h-4 w-4 text-neutral-500" />
+              <h2 className="font-display text-sm text-neutral-200">Live transcript</h2>
             </div>
-            <span className="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-neutral-500">
               Auto-scroll
             </span>
           </div>

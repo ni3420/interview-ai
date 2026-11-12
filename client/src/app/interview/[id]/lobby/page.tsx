@@ -4,10 +4,9 @@ import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { ArrowLeft, Loader2, Sparkles, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { InterviewLobby } from "@/features/interview/lobby/interview-lobby";
 import type { ResumeStatus } from "@/features/interview/lobby/processing-checklist";
 
@@ -38,39 +37,40 @@ export default function InterviewLobbyPage() {
 
   const [isStarting, setIsStarting] = useState(false);
 
-  // Loading State
   if (interview === undefined) {
     return (
-      <div className="flex h-screen items-center justify-center bg-white dark:bg-slate-950">
+      <div className="flex min-h-[60vh] items-center justify-center px-4">
         <div className="flex flex-col items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-          <p className="text-xs font-medium text-slate-400">Loading interview lobby...</p>
+          <Loader2
+            className="h-5 w-5 animate-spin text-muted-foreground"
+            aria-hidden="true"
+          />
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Loading lobby
+          </p>
         </div>
       </div>
     );
   }
 
-  // Not Found State
   if (interview === null) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center bg-white px-4 py-12 dark:bg-slate-950">
-        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(45%_40%_at_50%_40%,rgba(239,68,68,0.08),transparent_100%)]" />
-        <div className="flex max-w-md flex-col items-center text-center">
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-600 dark:bg-red-500/20 dark:text-red-400">
-            <AlertCircle className="h-7 w-7" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Interview Not Found
-          </h1>
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 sm:text-sm">
-            This interview session does not exist or you do not have permission to access it.
-          </p>
-          <Button asChild className="mt-6 rounded-xl">
-            <Link href="/dashboard">Return to Dashboard</Link>
-          </Button>
-        </div>
+      <div className="mx-auto flex min-h-[60vh] w-full max-w-md flex-col items-center justify-center px-4 text-center">
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          Not found
+        </p>
+        <h1 className="mt-3 font-display text-3xl leading-tight tracking-tight text-foreground">
+          This session does not exist
+        </h1>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          It may have been removed, or it belongs to another account.
+        </p>
+        <Link
+          href="/dashboard"
+          className="mt-6 inline-flex h-10 items-center rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          Back to dashboard
+        </Link>
       </div>
     );
   }
@@ -92,36 +92,27 @@ export default function InterviewLobbyPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full bg-white px-4 py-6 dark:bg-slate-950 sm:py-10">
-      {/* Background Ambient Gradient */}
-      <div
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(50%_45%_at_50%_25%,rgba(139,92,246,0.12),transparent_100%)] dark:bg-[radial-gradient(50%_45%_at_50%_25%,rgba(124,58,237,0.22),transparent_100%)]"
-        aria-hidden="true"
-      />
+    <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+      <Link
+        href="/dashboard"
+        className="group inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ArrowLeft
+          className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
+          aria-hidden="true"
+        />
+        Back to dashboard
+      </Link>
 
-      <div className="mx-auto max-w-5xl">
-        {/* Navigation Link */}
-        <div className="mb-6">
-          <Link
-            href="/dashboard"
-            className="group inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-400 transition-colors hover:text-slate-900 dark:text-slate-500 dark:hover:text-slate-100"
-          >
-            <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-1" />
-            Back to Dashboard
-          </Link>
-        </div>
-
-        {/* Lobby Content Wrapper */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-xl backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-900/80 sm:p-8">
-          <InterviewLobby
-            interviewId={interviewId}
-            jobDescription={interview.jobDescription}
-            resumeStatus={resume?.status}
-            isReady={hasQuestions}
-            onStart={handleStart}
-            isStarting={isStarting}
-          />
-        </div>
+      <div className="mt-6">
+        <InterviewLobby
+          interviewId={interviewId}
+          jobDescription={interview.jobDescription}
+          resumeStatus={resume?.status}
+          isReady={hasQuestions}
+          onStart={handleStart}
+          isStarting={isStarting}
+        />
       </div>
     </div>
   );

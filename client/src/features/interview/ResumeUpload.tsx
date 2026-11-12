@@ -1,18 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Upload, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Upload, Trash2, Loader2 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -140,106 +131,87 @@ export function ResumeUpload({
   };
 
   return (
-    <Card
-      className={cn(
-        "transition-all",
-        isDragOver && "border-primary bg-primary/5"
-      )}
-    >
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Resume Upload</CardTitle>
-            <CardDescription>Upload your resume as a PDF file</CardDescription>
+    <div>
+      <div
+        className={cn(
+          "relative rounded-lg border border-dashed p-8 text-center transition-colors",
+          isDragOver
+            ? "border-foreground/40 bg-muted/60"
+            : "border-border bg-muted/20",
+          disabled && "pointer-events-none opacity-60"
+        )}
+        onDragOver={(e) => {
+          e.preventDefault();
+          if (!disabled) setIsDragOver(true);
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault();
+          setIsDragOver(false);
+        }}
+        onDrop={handleDrop}
+      >
+        <input
+          type="file"
+          accept=".pdf,application/pdf"
+          id="resume-upload"
+          aria-label="Upload resume PDF"
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          disabled={disabled}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleFileSelect(file);
+            // Allow selecting the same file again.
+            e.target.value = "";
+          }}
+        />
+
+        <div className="pointer-events-none">
+          <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-md border border-border bg-background">
+            {isUploading ? (
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            ) : (
+              <Upload className="h-5 w-5 text-muted-foreground" />
+            )}
           </div>
 
-          {uploadedResume && (
-            <span className="inline-flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
-              <CheckCircle className="h-4 w-4" />
+          <p className="font-display text-lg">
+            {isUploading ? "Reading your resume..." : "Drop your resume here"}
+          </p>
+
+          <p className="mt-1 text-sm text-muted-foreground">
+            or click to browse files
+          </p>
+
+          <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            PDF / max 5 MB
+          </p>
+        </div>
+      </div>
+
+      {uploadedResume && (
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-border pt-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full bg-success"
+              aria-hidden="true"
+            />
+            <span className="truncate text-sm">{uploadedResume.fileName}</span>
+            <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
               Ready
             </span>
-          )}
-        </div>
-      </CardHeader>
+          </div>
 
-      <CardContent>
-        <div
-          className={cn(
-            "relative rounded-lg border-2 border-dashed p-8 text-center transition-colors",
-            isDragOver
-              ? "border-primary bg-primary/5"
-              : "border-muted-foreground/25",
-            disabled && "pointer-events-none opacity-60"
-          )}
-          onDragOver={(e) => {
-            e.preventDefault();
-            if (!disabled) setIsDragOver(true);
-          }}
-          onDragLeave={(e) => {
-            e.preventDefault();
-            setIsDragOver(false);
-          }}
-          onDrop={handleDrop}
-        >
-          <input
-            type="file"
-            accept=".pdf,application/pdf"
-            id="resume-upload"
-            aria-label="Upload resume PDF"
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+          <button
+            type="button"
             disabled={disabled}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void handleFileSelect(file);
-              // Allow selecting the same file again.
-              e.target.value = "";
-            }}
-          />
-
-          <div className="pointer-events-none">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-              {isUploading ? (
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              ) : (
-                <Upload className="h-8 w-8 text-muted-foreground" />
-              )}
-            </div>
-
-            <p className="text-lg font-medium">
-              {isUploading
-                ? "Uploading resume..."
-                : "Drag & drop your resume (PDF)"}
-            </p>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              or click to browse
-            </p>
-
-            <p className="mt-2 text-xs text-muted-foreground">
-              Max 5MB · PDF only
-            </p>
-          </div>
+            onClick={handleRemove}
+            aria-label="Remove uploaded resume"
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
-
-        {uploadedResume && (
-          <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border bg-muted p-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <CheckCircle className="h-5 w-5 shrink-0 text-green-600" />
-              <Label className="truncate">{uploadedResume.fileName}</Label>
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={disabled}
-              onClick={handleRemove}
-              aria-label="Remove uploaded resume"
-            >
-              <AlertCircle className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

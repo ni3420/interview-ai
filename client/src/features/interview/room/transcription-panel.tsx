@@ -328,7 +328,7 @@ export function TranscriptionPanel({
     >
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {groups.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-muted-foreground">
+          <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center text-neutral-500">
             <Mic className="h-8 w-8 animate-pulse" />
             <p className="text-sm">Listening to the conversation...</p>
             <p className="text-xs">
@@ -340,12 +340,12 @@ export function TranscriptionPanel({
             <div
               key={group.key}
               data-testid="transcript-group"
-              className="space-y-3 rounded-xl border bg-muted/40 p-3"
+              className="space-y-3 rounded-lg border-neutral-800 bg-neutral-900/60 p-3"
             >
               {group.question && (
                 <div className="space-y-1">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span className="font-medium text-primary">
+                  <div className="flex items-center justify-between text-xs text-neutral-500">
+                    <span className="font-medium text-signal">
                       {group.question.speaker}
                     </span>
                     <span>{group.question.timestamp}</span>
@@ -359,9 +359,9 @@ export function TranscriptionPanel({
               {group.answers.map((answer) => (
                 <div
                   key={answer.utteranceKey}
-                  className="space-y-1 rounded-lg border-l-2 border-primary/40 bg-background/60 py-2 pl-3"
+                  className="space-y-1 rounded-lg border-l-2 border-signal/40 bg-neutral-950/40 py-2 pl-3"
                 >
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <div className="flex items-center justify-between text-xs text-neutral-500">
                     <span className="font-medium">{answer.speaker}</span>
                     <span>{answer.timestamp}</span>
                   </div>

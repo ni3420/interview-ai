@@ -54,7 +54,9 @@ export function Navbar({
             )}
           </button>
         )}
-        <h1 className="truncate text-sm font-semibold text-foreground">{title}</h1>
+        <h1 className="truncate font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          {title}
+        </h1>
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">

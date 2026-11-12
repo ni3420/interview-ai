@@ -29,10 +29,8 @@ function Wordmark() {
   return (
     <span
       aria-hidden="true"
-      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted font-mono text-[11px] font-semibold tracking-tight text-foreground"
-    >
-      IA
-    </span>
+      className="h-5 w-[3px] shrink-0 rounded-full bg-signal"
+    />
   );
 }
 

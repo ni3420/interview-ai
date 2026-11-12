@@ -55,7 +55,7 @@ export function getProcessingSteps(status?: ResumeStatus): ProcessingStep[] {
 
 function StepIcon({ state }: { state: StepState }) {
   if (state === "done")
-    return <CheckCircle2 className="h-5 w-5 text-green-600" />;
+    return <CheckCircle2 className="h-5 w-5 text-success" />;
   if (state === "active")
     return <Loader2 className="h-5 w-5 animate-spin text-primary" />;
   if (state === "error")

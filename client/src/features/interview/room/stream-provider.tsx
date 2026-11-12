@@ -14,7 +14,7 @@ import {
   StreamVideo,
   StreamVideoClient,
 } from "@stream-io/video-react-sdk";
-import { AlertCircle, Loader2, Sparkles, VideoOff } from "lucide-react";
+import { AlertCircle, Loader2, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { captureException } from "@/lib/glitchtip";
@@ -74,24 +74,18 @@ interface StatusScreenProps {
 
 function StatusScreen({ icon, title, description, action }: StatusScreenProps) {
   return (
-    <div className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center overflow-hidden bg-slate-950/80 px-4 backdrop-blur-xl transition-all">
-      {/* Background Ambient Radial Glow */}
-      <div
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(50%_50%_at_50%_50%,rgba(124,58,237,0.25),transparent_100%)]"
-        aria-hidden="true"
-      />
-
-      {/* Floating Glassmorphism Modal Box */}
-      <div className="relative flex w-full max-w-md flex-col items-center justify-center rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 text-center shadow-2xl backdrop-blur-md sm:p-8">
-        <div className="mb-4">{icon}</div>
-        <div className="space-y-1.5">
-          <h2 className="text-xl font-extrabold tracking-tight text-slate-100 sm:text-2xl">
-            {title}
-          </h2>
-          <p className="text-xs text-slate-400 leading-relaxed sm:text-sm">
-            {description}
-          </p>
-        </div>
+    <div className="fixed inset-0 z-50 flex h-screen w-screen items-center justify-center overflow-hidden bg-neutral-950 px-4">
+      <div className="relative flex w-full max-w-md flex-col border border-neutral-800 bg-neutral-900 p-6 sm:p-8">
+        <div className="mb-5 text-neutral-300">{icon}</div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-neutral-500">
+          Interview room
+        </p>
+        <h2 className="mt-2 font-display text-2xl leading-tight tracking-tight text-neutral-100">
+          {title}
+        </h2>
+        <p className="mt-3 text-sm leading-relaxed text-neutral-400">
+          {description}
+        </p>
         {action && <div className="mt-6 w-full">{action}</div>}
       </div>
     </div>
@@ -217,14 +211,9 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   if (state.status === "loading") {
     return (
       <StatusScreen
-        icon={
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20 text-primary ring-1 ring-primary/30">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="absolute -inset-1 -z-10 rounded-2xl bg-primary/20 blur-md" />
-          </div>
-        }
-        title="Connecting Session..."
-        description="Initializing video room and requesting camera/microphone access. Please allow browser prompts to continue."
+        icon={<Loader2 className="h-6 w-6 animate-spin" />}
+        title="Connecting room"
+        description="Setting up the video room and requesting camera and microphone access. Allow the browser prompt to continue."
       />
     );
   }
@@ -232,16 +221,12 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   if (state.status === "unconfigured") {
     return (
       <StatusScreen
-        icon={
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-800 text-slate-400 ring-1 ring-slate-700">
-            <VideoOff className="h-8 w-8" />
-          </div>
-        }
-        title="Interview Room Unavailable"
-        description="The live video stream is not configured for this session yet. Your responses and questions are safely saved."
+        icon={<VideoOff className="h-6 w-6" />}
+        title="Video is not configured"
+        description="Live video is not enabled for this session yet. Your questions and answers are saved."
         action={
-          <Button asChild className="w-full rounded-xl bg-slate-800 text-slate-100 hover:bg-slate-700">
-            <Link href="/dashboard">Return to Dashboard</Link>
+          <Button asChild variant="secondary" className="w-full">
+            <Link href="/dashboard">Back to dashboard</Link>
           </Button>
         }
       />
@@ -251,16 +236,12 @@ export function StreamProvider({ interviewId, children }: StreamProviderProps) {
   if (state.status === "error") {
     return (
       <StatusScreen
-        icon={
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-500/20 text-red-400 ring-1 ring-red-500/30">
-            <AlertCircle className="h-8 w-8" />
-          </div>
-        }
-        title="Connection Error"
+        icon={<AlertCircle className="h-6 w-6 text-destructive" />}
+        title="Connection failed"
         description={state.message}
         action={
-          <Button asChild className="w-full rounded-xl bg-slate-800 text-slate-100 hover:bg-slate-700">
-            <Link href="/dashboard">Return to Dashboard</Link>
+          <Button asChild variant="secondary" className="w-full">
+            <Link href="/dashboard">Back to dashboard</Link>
           </Button>
         }
       />

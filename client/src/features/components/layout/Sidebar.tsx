@@ -93,13 +93,11 @@ export function Sidebar({
           >
             <span
               aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-sidebar-border bg-sidebar-accent font-mono text-[11px] font-semibold tracking-tight text-sidebar-accent-foreground"
-            >
-              IA
-            </span>
+              className="h-5 w-[3px] shrink-0 rounded-full bg-signal"
+            />
             {(!collapsed || isOpen) && (
-              <span className="truncate text-sm font-semibold tracking-tight">
-                Interview AI
+              <span className="truncate font-display text-[17px] leading-none tracking-tight text-sidebar-foreground">
+                InterviewAI
               </span>
             )}
           </Link>
