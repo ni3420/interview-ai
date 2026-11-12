@@ -62,9 +62,8 @@ export function ThemeToggle({ className }: { className?: string }) {
       aria-label="Toggle dark mode"
       title="Toggle dark mode"
       className={cn(
-        "inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition-colors",
-        "hover:bg-slate-100 hover:text-slate-900",
-        "dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white",
+        "inline-flex h-9 w-9 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors",
+        "hover:bg-muted hover:text-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         className
       )}

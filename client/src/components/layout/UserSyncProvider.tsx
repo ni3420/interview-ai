@@ -102,16 +102,16 @@ export default function UserSyncProvider({
   // image backfilled.
   const identityHasLanded = syncState === "unsynced" || syncState === "synced";
 
-  // Public surfaces stay readable while signed out: the marketing page is the
-  // first thing a visitor sees, and the auth pages are where a refused visitor
-  // can act. App routes are already gated by the server-side proxy.
-  const isPublicPage =
-    pathname === "/" || pathname === "/sign-in" || pathname === "/sign-up";
+  // Only the application surfaces require a signed-in session. Everything else
+  // — marketing, auth, and the 404 page — stays readable while signed out.
+  const isAppRoute = ["/dashboard", "/interview", "/reports", "/admin"].some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 
   useEffect(() => {
-    if (!isLoaded || isSignedIn || isPublicPage) return;
+    if (!isLoaded || isSignedIn || !isAppRoute) return;
     router.push("/sign-in");
-  }, [isLoaded, isSignedIn, isPublicPage, router]);
+  }, [isLoaded, isSignedIn, isAppRoute, router]);
 
   // A taken address is not a transient failure — retrying cannot free it — so
   // leave the protected surface and explain it on the page that can act.
@@ -148,9 +148,9 @@ export default function UserSyncProvider({
   );
 
   if (!isLoaded) {
-    // Marketing and auth pages must paint immediately; only protected routes
-    // need the shell-shaped boot state while Clerk resolves.
-    if (isPublicPage) {
+    // Marketing, auth, and not-found pages must paint immediately; only
+    // protected routes need the shell-shaped boot state while Clerk resolves.
+    if (!isAppRoute) {
       return (
         <UserSyncContext.Provider value={value}>
           {children}

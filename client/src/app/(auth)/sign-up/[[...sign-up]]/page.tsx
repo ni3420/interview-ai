@@ -52,6 +52,14 @@ export default function SignUpPage() {
       title="Create account"
       description="Set up an account for your interview workspace."
       legal="By creating an account, you agree to the Terms of Service and Privacy Policy."
+      footer={
+        <p>
+          Already have an account?{" "}
+          <Link href="/sign-in" className="font-medium text-foreground underline underline-offset-4">
+            Sign in
+          </Link>
+        </p>
+      }
     >
       <Suspense fallback={null}>
         <EmailInUseNotice />

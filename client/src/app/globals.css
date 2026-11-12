@@ -5,6 +5,8 @@
 :root {
   --background: #fafaf9;
   --foreground: #18181b;
+  --signal: var(--primary);
+  --evidence: var(--info);
   --card: #ffffff;
   --card-foreground: #18181b;
   --popover: #ffffff;
@@ -41,6 +43,8 @@
 .dark {
   --background: #0c0c0d;
   --foreground: #f4f4f5;
+  --signal: var(--primary);
+  --evidence: var(--info);
   --card: #141416;
   --card-foreground: #f4f4f5;
   --popover: #141416;
@@ -73,6 +77,69 @@
   --sidebar-ring: #818cf8;
 }
 
+/* Marketing scope: warm paper / signal red. Scoped so product surfaces are untouched. */
+.landing-editorial {
+  --background: #f3f0e8;
+  --foreground: #171714;
+  --card: #fffdf7;
+  --card-foreground: #171714;
+  --popover: #fffdf7;
+  --popover-foreground: #171714;
+  --primary: #c93625;
+  --primary-foreground: #fffdf7;
+  --secondary: #eae5d9;
+  --secondary-foreground: #171714;
+  --muted: #eae5d9;
+  --muted-foreground: #646158;
+  --accent: #eae5d9;
+  --accent-foreground: #171714;
+  --destructive: #a8281a;
+  --destructive-foreground: #fffdf7;
+  --success: #2e7d4f;
+  --success-foreground: #fffdf7;
+  --warning: #8a5a00;
+  --warning-foreground: #fffdf7;
+  --info: #3157d5;
+  --info-foreground: #fffdf7;
+  --border: #d8d2c6;
+  --input: #d8d2c6;
+  --ring: #3157d5;
+  --signal: #c93625;
+  --evidence: #3157d5;
+  --primary-hover: #a82b1c;
+}
+
+.dark .landing-editorial {
+  --background: #14130f;
+  --foreground: #f5f2ea;
+  --card: #1c1a15;
+  --card-foreground: #f5f2ea;
+  --popover: #1c1a15;
+  --popover-foreground: #f5f2ea;
+  --primary: #ff6a52;
+  --primary-foreground: #14130f;
+  --secondary: #26231c;
+  --secondary-foreground: #f5f2ea;
+  --muted: #26231c;
+  --muted-foreground: #b3ada0;
+  --accent: #26231c;
+  --accent-foreground: #f5f2ea;
+  --destructive: #ff826d;
+  --destructive-foreground: #14130f;
+  --success: #5bbe8b;
+  --success-foreground: #14130f;
+  --warning: #e0b155;
+  --warning-foreground: #14130f;
+  --info: #8ca2ff;
+  --info-foreground: #14130f;
+  --border: #2e2b24;
+  --input: #2e2b24;
+  --ring: #8ca2ff;
+  --signal: #ff826d;
+  --evidence: #8ca2ff;
+  --primary-hover: #ff826d;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -99,6 +166,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-signal: var(--signal, var(--primary));
+  --color-evidence: var(--evidence, var(--info));
+  --font-display: Georgia, "Times New Roman", "Iowan Old Style", serif;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-muted: var(--sidebar-muted);
@@ -180,3 +250,14 @@
     }
   }
 }
+
+.landing-editorial .cl-formFieldInput,
+.landing-editorial .cl-socialButtonsBlockButton {
+  border-color: var(--border) !important;
+}
+
+
+.font-display {
+  font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+

@@ -10,24 +10,24 @@ import { useTheme } from "next-themes";
  */
 const elements = {
   rootBox: "w-full",
-  cardBox: "w-full shadow-none",
-  card: "w-full gap-4 rounded-lg border border-border bg-card p-5 shadow-xs sm:p-6",
+  cardBox: "w-full shadow-none!",
+  card: "w-full gap-5 rounded-none bg-transparent! p-0! shadow-none!",
   logoBox: "hidden",
   logoImage: "hidden",
   headerTitle: "hidden",
   headerSubtitle: "hidden",
   socialButtonsBlockButton:
-    "h-9 rounded-md border border-input bg-card text-foreground text-[13px] font-medium transition-colors hover:bg-accent",
+    "h-9 rounded-md border! bg-transparent! text-foreground text-[13px] font-medium shadow-none! transition-colors hover:bg-accent",
   socialButtonsBlockButtonText: "text-[13px] font-medium text-foreground!",
-  dividerLine: "bg-border",
+  dividerLine: "bg-border!",
   dividerText: "text-micro font-medium uppercase text-muted-foreground",
   formFieldLabel: "mb-1 text-caption font-medium text-foreground",
   formFieldInput:
-    "h-9 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20",
+    "h-9 w-full rounded-md border! px-3 text-sm text-foreground shadow-none! outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20",
   formFieldErrorText: "mt-1 text-micro text-destructive",
   formButtonPrimary:
-    "h-9 w-full rounded-md text-sm font-medium transition-colors",
-  footerAction: "mt-1",
+    "h-10 w-full rounded-md text-[13px] font-semibold shadow-none! transition-colors",
+  footer: "hidden!",
   footerActionText: "text-caption text-muted-foreground",
   footerActionLink:
     "text-caption font-medium text-primary! underline-offset-4 hover:underline",
@@ -39,31 +39,33 @@ const elements = {
 };
 
 const lightVariables = {
-  colorPrimary: "#4338ca",
-  colorPrimaryForeground: "#ffffff",
-  colorBackground: "#ffffff",
-  colorText: "#18181b",
-  colorTextSecondary: "#71717a",
-  colorInputBackground: "#fafaf9",
-  colorInputText: "#18181b",
-  colorDanger: "#b91c1c",
-  colorSuccess: "#15803d",
+  colorPrimary: "#1c1b17",
+  colorPrimaryForeground: "#f7f4ec",
+  colorBackground: "#f3f0e8",
+  colorText: "#171714",
+  colorTextSecondary: "#646158",
+  colorBorder: "#d9d3c4",
+  colorInputBackground: "#fffdf7",
+  colorInputText: "#171714",
+  colorDanger: "#c93625",
+  colorSuccess: "#3f6b3a",
   colorWarning: "#b45309",
-  borderRadius: "0.5rem",
+  borderRadius: "0.375rem",
 };
 
 const darkVariables = {
-  colorPrimary: "#818cf8",
-  colorPrimaryForeground: "#0c0c0d",
-  colorBackground: "#141416",
-  colorText: "#f4f4f5",
-  colorTextSecondary: "#a1a1aa",
-  colorInputBackground: "#0c0c0d",
-  colorInputText: "#f4f4f5",
-  colorDanger: "#f87171",
-  colorSuccess: "#4ade80",
+  colorPrimary: "#f5f2ea",
+  colorPrimaryForeground: "#14130f",
+  colorBackground: "#14130f",
+  colorText: "#f5f2ea",
+  colorTextSecondary: "#b3ada0",
+  colorBorder: "#3a352c",
+  colorInputBackground: "#201d17",
+  colorInputText: "#f5f2ea",
+  colorDanger: "#ff826d",
+  colorSuccess: "#8fbf85",
   colorWarning: "#fbbf24",
-  borderRadius: "0.5rem",
+  borderRadius: "0.375rem",
 };
 
 export function useAuthAppearance() {

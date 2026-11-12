@@ -1,121 +1,104 @@
 "use client";
 
 import Link from "next/link";
-import {
-  ArrowRight,
-  BrainCircuit,
-  CalendarClock,
-  CheckCircle2,
-  FileText,
-  Pin,
-  Sparkles,
-  TrendingUp,
-} from "lucide-react";
-import { Button } from "@/features/components/common/Button";
-import { Badge } from "@/features/components/common/Badge";
-import { Card, CardContent } from "@/features/components/common/Card";
+import { ArrowUpRight } from "lucide-react";
 
-function FloatingNote() {
+const WAVEFORM = [
+  18, 30, 44, 26, 56, 38, 22, 48, 62, 34, 20, 42, 58, 30, 16, 36, 50, 24, 40,
+  28, 14, 32, 46, 20, 34, 52, 26, 18, 38, 22,
+];
+
+const RAIL = [
+  { label: "Resume", lines: [96, 84, 90, 62] },
+  { label: "Role", lines: [88, 94, 72, 58] },
+];
+
+function ProductEvidence() {
   return (
-    <div className="absolute left-2 top-8 z-10 hidden w-64 -rotate-3 transition-transform hover:rotate-0 xl:left-8 xl:top-12 xl:block">
-      <div className="rounded-xl border border-amber-200 bg-amber-50/90 p-4 shadow-lg backdrop-blur-sm dark:border-amber-500/30 dark:bg-amber-950/40">
-        <div className="mb-2 flex items-center gap-2 text-amber-700 dark:text-amber-400">
-          <Pin className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="text-xs font-semibold uppercase tracking-wide">
-            Pro tip
+    <figure className="lg:col-span-5 lg:col-start-8">
+      <div className="rounded-[10px] border border-border bg-card p-2">
+        <div className="flex items-center justify-between gap-3 border-b border-border px-2 py-2">
+          <span className="font-mono text-[10.5px] font-semibold tracking-tight text-muted-foreground">
+            interview / session-042
+          </span>
+          <span className="inline-flex items-center gap-1.5 font-mono text-[10.5px] font-semibold uppercase tracking-[0.1em] text-signal">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-signal" />
+            Live
           </span>
         </div>
-        <p className="text-xs leading-relaxed text-amber-900/90 dark:text-amber-100/90">
-          Take notes and get real-time STAR method feedback on every response.
-        </p>
-      </div>
-    </div>
-  );
-}
 
-function FloatingSchedule() {
-  return (
-    <div className="absolute right-2 top-8 z-10 hidden w-64 rotate-2 transition-transform hover:rotate-0 xl:right-8 xl:top-10 xl:block">
-      <Card className="border-slate-200/80 bg-white/90 shadow-lg backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-900/90">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <span className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-slate-100">
-              <CalendarClock className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-              Upcoming Session
-            </span>
-            <Badge status="info" dot>
-              Live
-            </Badge>
+        <div className="grid grid-cols-[minmax(0,34%)_minmax(0,1fr)]">
+          <div className="border-r border-border p-3">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              Source
+            </p>
+            {RAIL.map((item) => (
+              <div key={item.label} className="mt-3">
+                <p className="font-mono text-[10.5px] font-semibold text-foreground">
+                  {item.label}
+                </p>
+                <div className="mt-1.5 space-y-1" aria-hidden="true">
+                  {item.lines.map((width, index) => (
+                    <span
+                      key={index}
+                      className="block h-1 rounded-[2px] bg-muted"
+                      style={{ width: `${width}%` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="mt-4 border-t border-border pt-2 font-mono text-[10.5px] leading-relaxed text-muted-foreground">
+              2 of 6
+              <br />
+              questions
+            </p>
           </div>
-          <p className="mt-2 text-xs font-medium text-slate-700 dark:text-slate-300 truncate">
-            Senior Frontend AI Interview
-          </p>
-          <p className="mt-1 text-[11px] text-slate-400">Today · 15:00 min</p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
-function FloatingScore() {
-  return (
-    <div className="absolute bottom-6 left-2 z-10 hidden w-64 rotate-2 transition-transform hover:rotate-0 xl:bottom-10 xl:left-6 xl:block">
-      <Card className="border-slate-200/80 bg-white/90 shadow-lg backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-900/90">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-              Confidence score
-            </span>
-            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-              92%
-            </span>
-          </div>
-          <div
-            className="mt-2.5 h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
-            role="progressbar"
-            aria-valuenow={92}
-            aria-valuemin={0}
-            aria-valuemax={100}
-          >
-            <div className="h-full w-[92%] rounded-full bg-emerald-500 transition-all duration-500" />
-          </div>
-          <p className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-            <TrendingUp className="h-3 w-3 shrink-0 text-emerald-500" aria-hidden="true" />
-            Technical accuracy up 12% this week
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function FloatingMatching() {
-  return (
-    <div className="absolute bottom-6 right-2 z-10 hidden w-64 -rotate-2 transition-transform hover:rotate-0 xl:bottom-8 xl:right-6 xl:block">
-      <Card className="border-slate-200/80 bg-white/90 shadow-lg backdrop-blur-sm dark:border-slate-800/80 dark:bg-slate-900/90">
-        <CardContent className="p-4">
-          <div className="mb-2.5 flex items-center justify-between">
-            <div className="flex items-center gap-1.5">
-              <BrainCircuit className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
-              <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                RAG-Powered Match
-              </span>
+          <div className="flex flex-col justify-between p-4">
+            <div>
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Question
+              </p>
+              <p className="mt-2 text-[15px] font-medium leading-snug text-foreground">
+                You shipped a design system across three teams. What broke first,
+                and what did you change?
+              </p>
             </div>
-            <Badge status="success">98% Fit</Badge>
+
+            <div className="mt-6">
+              <div
+                className="flex h-14 items-center gap-[3px]"
+                aria-hidden="true"
+              >
+                {WAVEFORM.map((height, index) => (
+                  <span
+                    key={index}
+                    className="w-[3px] flex-1 rounded-[2px] bg-signal/70"
+                    style={{ height: `${height}px` }}
+                  />
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-3 border-t border-border pt-2">
+                <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                  00:41
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  Listening
+                </span>
+                <span className="font-mono text-[10.5px] tabular-nums text-muted-foreground">
+                  00:52
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              <FileText className="h-3 w-3 text-slate-400" aria-hidden="true" />
-              Resume
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-              <FileText className="h-3 w-3 text-slate-400" aria-hidden="true" />
-              Job Spec
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </div>
+      <figcaption className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">
+        Sample session. Questions are generated from the resume and the role you
+        paste in.
+      </figcaption>
+    </figure>
   );
 }
 
@@ -125,51 +108,60 @@ export interface HeroSectionProps {
 
 export function HeroSection({ ctaHref = "/sign-up" }: HeroSectionProps) {
   return (
-    <section className="relative flex min-h-[580px] w-full items-center justify-center overflow-hidden rounded-3xl py-16 lg:py-24">
-      {/* Background Radial Glow */}
-      <div
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(50%_50%_at_50%_40%,rgba(139,92,246,0.15),transparent_100%)] dark:bg-[radial-gradient(50%_50%_at_50%_40%,rgba(124,58,237,0.25),transparent_100%)]"
-        aria-hidden="true"
-      />
+    <section className="border-b border-border pb-14 pt-14 lg:pb-20 lg:pt-18">
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:gap-8">
+        <div className="lg:col-span-6">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-signal">
+            AI voice interview practice
+          </p>
 
-      {/* Hero Central Content Container */}
-      <div className="relative z-20 mx-auto flex w-full max-w-2xl flex-col items-center text-center">
-        <div className="mb-6 flex justify-center">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white shadow-md ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-            <Sparkles className="h-7 w-7 text-primary" aria-hidden="true" />
-          </span>
+          <h1 className="mt-5 font-display text-[42px] font-medium leading-[0.98] tracking-[-0.025em] text-foreground sm:text-[52px] lg:text-[64px]">
+            Rehearse the interview you&apos;re actually going to have.
+          </h1>
+
+          <p className="mt-6 max-w-[46ch] text-[17px] leading-[1.55] text-muted-foreground">
+            Upload a resume and the job description. The interviewer asks 5&ndash;7
+            questions by voice, follows up on thin answers, then writes a report
+            with the quote behind every score.
+          </p>
+
+          <div className="mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
+            <Link
+              href={ctaHref}
+              className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 text-[13px] font-bold text-primary-foreground transition-colors hover:bg-[var(--primary-hover)]"
+            >
+              Start a mock interview
+            </Link>
+            <Link
+              href="/sign-in"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-foreground underline decoration-border underline-offset-4 transition-colors hover:decoration-foreground"
+            >
+              Sign in
+              <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
+          </div>
+
+          <dl className="mt-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border pt-4 text-[11px]">
+            {[
+              ["Questions", "5–7 per session"],
+              ["Default length", "30 minutes"],
+              ["Report", "Scored with quotes"],
+            ].map(([term, value], index) => (
+              <div key={term} className="flex items-center gap-4">
+                {index > 0 && (
+                  <span aria-hidden="true" className="h-3 w-px bg-border" />
+                )}
+                <div>
+                  <dt className="sr-only">{term}</dt>
+                  <dd className="font-medium text-muted-foreground">{value}</dd>
+                </div>
+              </div>
+            ))}
+          </dl>
         </div>
 
-        <h1 className="text-balance text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-5xl lg:text-6xl">
-          Practice, prep, and ace your AI interviews
-          <span className="block text-primary sm:inline"> all in one place</span>
-        </h1>
-
-        <p className="mt-6 max-w-xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-          Upload job descriptions, match your resume, and experience realistic AI
-          mock interviews with instant, actionable feedback.
-        </p>
-
-        <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
-          <Button asChild size="lg" rightIcon={<ArrowRight className="h-4 w-4" />}>
-            <Link href={ctaHref}>Start Free Mock Interview</Link>
-          </Button>
-          <Button asChild size="lg" variant="outline">
-            <Link href="/sign-in">Sign In</Link>
-          </Button>
-        </div>
-
-        <p className="mt-4 flex items-center justify-center gap-2 text-xs font-medium text-slate-400">
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden="true" />
-          No credit card required
-        </p>
+        <ProductEvidence />
       </div>
-
-      {/* Floating UI Elements */}
-      <FloatingNote />
-      <FloatingSchedule />
-      <FloatingScore />
-      <FloatingMatching />
     </section>
   );
 }
