@@ -1,14 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Check, Plus, StickyNote, X } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/features/components/common/Card";
 
 export interface NoteItem {
   id: string;
@@ -57,9 +51,7 @@ export function NotesWidget({
 
   const toggle = (id: string) => {
     setNotes((prev) =>
-      prev.map((note) =>
-        note.id === id ? { ...note, done: !note.done } : note
-      )
+      prev.map((note) => (note.id === id ? { ...note, done: !note.done } : note))
     );
   };
 
@@ -81,80 +73,85 @@ export function NotesWidget({
   const remaining = notes.filter((note) => !note.done).length;
 
   return (
-    <Card className="h-full">
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="flex items-center gap-2">
-          <StickyNote className="h-4 w-4 text-primary" aria-hidden="true" />
-          Quick notes
-        </CardTitle>
-        <span className="text-xs text-slate-400">{remaining} to do</span>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <form onSubmit={addNote} className="flex gap-2">
-          <input
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Add a note…"
-            aria-label="Add a note"
-            className="h-9 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
-          />
-          <button
-            type="submit"
-            aria-label="Add note"
-            disabled={!draft.trim()}
-            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </form>
+    <section aria-labelledby="quick-notes">
+      <div className="flex items-baseline justify-between gap-3 border-b border-border pb-3">
+        <h2
+          id="quick-notes"
+          className="font-display text-[22px] font-medium tracking-[-0.01em]"
+        >
+          Notes
+        </h2>
+        <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+          {remaining} to do
+        </span>
+      </div>
 
-        <ul className="space-y-1.5">
-          {notes.length === 0 && (
-            <li className="py-6 text-center text-sm text-slate-400">
-              No notes yet.
-            </li>
-          )}
-          {notes.map((note) => (
-            <li
-              key={note.id}
-              className="group flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+      <form onSubmit={addNote} className="mt-4 flex items-center gap-2">
+        <input
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="Add a note…"
+          aria-label="Add a note"
+          className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+        />
+        <button
+          type="submit"
+          aria-label="Add note"
+          disabled={!draft.trim()}
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </form>
+
+      <ul className="mt-3">
+        {notes.length === 0 && (
+          <li className="border-b border-border py-4 text-caption text-muted-foreground">
+            No notes yet. Add the things you keep forgetting.
+          </li>
+        )}
+        {notes.map((note) => (
+          <li
+            key={note.id}
+            className="group flex items-start gap-2.5 border-b border-border py-2.5"
+          >
+            <button
+              type="button"
+              onClick={() => toggle(note.id)}
+              role="checkbox"
+              aria-checked={note.done}
+              aria-label={note.text}
+              className={cn(
+                "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] border transition-colors",
+                note.done
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border hover:border-muted-foreground"
+              )}
             >
-              <button
-                type="button"
-                onClick={() => toggle(note.id)}
-                role="checkbox"
-                aria-checked={note.done}
-                aria-label={note.text}
-                className={cn(
-                  "flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
-                  note.done
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-slate-300 dark:border-slate-600"
-                )}
-              >
-                {note.done && <Check className="h-3 w-3" aria-hidden="true" />}
-              </button>
-              <span
-                className={cn(
-                  "flex-1 text-sm",
-                  note.done && "text-slate-400 line-through"
-                )}
-              >
-                {note.text}
-              </span>
-              <button
-                type="button"
-                onClick={() => remove(note.id)}
-                aria-label={`Remove note: ${note.text}`}
-                className="opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-              >
-                <X className="h-4 w-4 text-slate-400 hover:text-destructive" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      </CardContent>
-    </Card>
+              {note.done && <Check className="h-3 w-3" aria-hidden="true" />}
+            </button>
+            <span
+              className={cn(
+                "min-w-0 flex-1 text-[13px] leading-snug",
+                note.done
+                  ? "text-muted-foreground line-through decoration-border"
+                  : "text-foreground"
+              )}
+            >
+              {note.text}
+            </span>
+            <button
+              type="button"
+              onClick={() => remove(note.id)}
+              aria-label={`Remove note: ${note.text}`}
+              className="shrink-0 opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
+            >
+              <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

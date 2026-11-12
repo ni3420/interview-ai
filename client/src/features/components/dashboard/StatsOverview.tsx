@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, ListChecks, TrendingDown, TrendingUp, Trophy, type LucideIcon } from "lucide-react";
-import { Card, CardContent } from "@/features/components/common/Card";
+import { TrendingDown, TrendingUp } from "lucide-react";
 import type { DashboardInterview } from "./TaskTable";
 
 export interface StatsOverviewProps {
@@ -24,8 +23,6 @@ interface Stat {
   value: string;
   hint: string;
   trend: number;
-  icon: LucideIcon;
-  accent: string;
 }
 
 export function StatsOverview({ interviews }: StatsOverviewProps) {
@@ -59,80 +56,68 @@ export function StatsOverview({ interviews }: StatsOverviewProps) {
 
   const stats: Stat[] = [
     {
-      label: "Time Saved",
+      label: "Time saved",
       value: formatDuration(minutesSaved),
-      hint: "Estimated vs. manual prep",
+      hint: "Estimated against manual prep",
       trend,
-      icon: Clock,
-      accent: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
     },
     {
-      label: "Interviews Completed",
+      label: "Sessions completed",
       value: String(completed.length),
       hint: `${completedThisWeek} this week`,
       trend,
-      icon: Trophy,
-      accent: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
     },
     {
-      label: "In Progress",
+      label: "In progress",
       value: String(inProgress.length),
-      hint: "Awaiting completion",
+      hint: "Waiting to be finished",
       trend: 0,
-      icon: ListChecks,
-      accent: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
     },
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {stats.map((stat) => {
-        const Icon = stat.icon;
-        const isUp = stat.trend >= 0;
+    <section
+      aria-label="Practice summary"
+      className="mt-8 grid divide-y divide-border border-b border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0"
+    >
+      {stats.map((stat, index) => {
         const showTrend = stat.trend !== 0;
+        const isUp = stat.trend >= 0;
         return (
-          <Card key={stat.label}>
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {stat.label}
-                  </p>
-                  <p className="mt-1 text-3xl font-semibold tracking-tight">
-                    {stat.value}
-                  </p>
-                </div>
-                <span
-                  className={`flex h-10 w-10 items-center justify-center rounded-lg ${stat.accent}`}
-                >
-                  <Icon className="h-5 w-5" aria-hidden="true" />
+          <div
+            key={stat.label}
+            className={
+              index === 0
+                ? "py-6 sm:pr-8"
+                : index === 1
+                  ? "py-6 sm:px-8"
+                  : "py-6 sm:pl-8"
+            }
+          >
+            <p className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {stat.label}
+            </p>
+            <p className="mt-2 font-display text-[40px] font-medium leading-none tracking-[-0.02em] tabular-nums">
+              {stat.value}
+            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {showTrend && (
+                <span className="inline-flex items-center gap-1 font-mono text-[11px] font-semibold text-foreground">
+                  {isUp ? (
+                    <TrendingUp className="h-3 w-3" aria-hidden="true" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" aria-hidden="true" />
+                  )}
+                  {isUp ? "+" : ""}
+                  {stat.trend}%
                 </span>
-              </div>
-              <div className="mt-3 flex items-center gap-2">
-                {showTrend && (
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                      isUp
-                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                        : "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400"
-                    }`}
-                  >
-                    {isUp ? (
-                      <TrendingUp className="h-3 w-3" aria-hidden="true" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3" aria-hidden="true" />
-                    )}
-                    {isUp ? "+" : ""}
-                    {stat.trend}%
-                  </span>
-                )}
-                <span className="text-xs text-slate-400">{stat.hint}</span>
-              </div>
-            </CardContent>
-          </Card>
+              )}
+              <span className="text-micro text-muted-foreground">{stat.hint}</span>
+            </div>
+          </div>
         );
       })}
-    </div>
+    </section>
   );
 }
 
