@@ -103,38 +103,41 @@ services:
       sizeGB: 1
 
   # ── Next.js client ─────────────────────────────────────────────────────────
-  - type: web
-    name: interview-ai-client
-    runtime: node
-    rootDir: client
-    plan: starter
-    buildCommand: npm install && npm run build
-    startCommand: npm run start
-    envVars:
-      # Convex cloud deployment URL (from `npx convex deploy`).
-      - key: NEXT_PUBLIC_CONVEX_URL
-        sync: false
-      - key: CONVEX_SITE_URL
-        sync: false
-      - key: AI_SERVICE_API_KEY
-        sync: false
-      - key: REDIS_URL
-        value: redis://valkey:6379
-      - key: CLERK_SECRET_KEY
-        sync: false
-      - key: CLERK_WEBHOOK_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-        sync: false
-      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
-        value: /sign-in
-      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
-        value: /sign-up
-      - key: STREAM_API_KEY
-        sync: false
-      - key: STREAM_API_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_STREAM_API_KEY
-        sync: false
-      - key: AI_SERVICE_URL
-        value: http://interview-ai-service:8000
+  # Temporarily commented out: deploy the backend first. To ship the client,
+  # uncomment this block and re-apply the Blueprint — then set CORS_ORIGINS on
+  # the ai-service to the client's real URL.
+  # - type: web
+  #   name: interview-ai-client
+  #   runtime: node
+  #   rootDir: client
+  #   plan: starter
+  #   buildCommand: npm install && npm run build
+  #   startCommand: npm run start
+  #   envVars:
+  #     # Convex cloud deployment URL (from `npx convex deploy`).
+  #     - key: NEXT_PUBLIC_CONVEX_URL
+  #       sync: false
+  #     - key: CONVEX_SITE_URL
+  #       sync: false
+  #     - key: AI_SERVICE_API_KEY
+  #       sync: false
+  #     - key: REDIS_URL
+  #       value: redis://valkey:6379
+  #     - key: CLERK_SECRET_KEY
+  #       sync: false
+  #     - key: CLERK_WEBHOOK_SECRET
+  #       sync: false
+  #     - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  #       sync: false
+  #     - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+  #       value: /sign-in
+  #     - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+  #       value: /sign-up
+  #     - key: STREAM_API_KEY
+  #       sync: false
+  #     - key: STREAM_API_SECRET
+  #       sync: false
+  #     - key: NEXT_PUBLIC_STREAM_API_KEY
+  #       sync: false
+  #     - key: AI_SERVICE_URL
+  #       value: http://interview-ai-service:8000
