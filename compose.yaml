@@ -57,7 +57,9 @@ services:
       # Required: the service refuses to start without a key, and there is no
       # default secret. Set AI_SERVICE_API_KEY in the root .env file.
       SERVICE_API_KEY: ${AI_SERVICE_API_KEY:?AI_SERVICE_API_KEY must be set in .env}
-      QDRANT_URL: http://qdrant:6333
+      # Cloud Qdrant comes from apps/ai-service/.env (via root .env);
+      # fallback keeps the local service name for offline runs.
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       # Embedding selection (EMBEDDING_PROVIDER, EMBEDDING_MODEL,
       # EMBEDDING_DIMENSION, EMBEDDING_CONFIG_VERSION, QDRANT_COLLECTION and the
