@@ -31,8 +31,20 @@ services:
       # service. Must equal AI_SERVICE_API_KEY on the worker and client.
       - key: SERVICE_API_KEY
         sync: false
+      # Qdrant Cloud (external service, not hosted on Render).
       - key: QDRANT_URL
-        value: http://qdrant:6333
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      # Match the cloud setup used locally (bge-base 768-dim, v2 collection).
+      - key: EMBEDDING_DIMENSION
+        value: "768"
+      - key: EMBEDDING_MODEL
+        sync: false
+      - key: EMBEDDING_CONFIG_VERSION
+        sync: false
+      - key: QDRANT_COLLECTION
+        sync: false
       # Local Ollama does not exist in the cloud: embeddings come from the
       # Cloudflare embedding worker, text generation from TokenHarbor.
       - key: EMBEDDING_PROVIDER
@@ -65,8 +77,9 @@ services:
     dockerContext: .
     plan: starter
     envVars:
+      # Redis (Aiven cloud, external service) — BullMQ queue backend.
       - key: REDIS_URL
-        value: redis://valkey:6379
+        sync: false
       - key: AI_SERVICE_URL
         value: http://interview-ai-service:8000
       - key: AI_SERVICE_API_KEY
@@ -76,31 +89,6 @@ services:
       # Convex HTTP actions endpoint for this deployment.
       - key: CONVEX_SITE_URL
         sync: false
-
-  # ── Qdrant vector store (internal only, persistent disk) ──────────────────
-  - type: pserv
-    name: qdrant
-    runtime: image
-    image:
-      url: docker.io/qdrant/qdrant:v1.19.2
-    plan: starter
-    disk:
-      name: qdrant-storage
-      mountPath: /qdrant/storage
-      sizeGB: 1
-
-  # ── Valkey 8 (BullMQ backend, internal only, persistent disk) ─────────────
-  - type: pserv
-    name: valkey
-    runtime: image
-    image:
-      url: docker.io/valkey/valkey:8-alpine
-    dockerCommand: ["valkey-server", "--appendonly", "yes"]
-    plan: starter
-    disk:
-      name: valkey-data
-      mountPath: /data
-      sizeGB: 1
 
   # ── Next.js client ─────────────────────────────────────────────────────────
   # Temporarily commented out: deploy the backend first. To ship the client,
