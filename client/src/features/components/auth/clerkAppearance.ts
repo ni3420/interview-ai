@@ -9,21 +9,28 @@ import { useTheme } from "next-themes";
  * the surrounding page still reads from the token layer in globals.css.
  */
 const elements = {
-  rootBox: "w-full",
-  cardBox: "w-full shadow-none!",
-  card: "w-full gap-5 rounded-none bg-transparent! p-0! shadow-none!",
+  // Hide the small "Last used" badge artifact on the corner of OAuth buttons.
+  badge: "hidden!",
+  lastAuthenticationStrategyBadge: "hidden!",
+  // Shared sizing/border utilities so inputs and OAuth buttons never clip at the edges.
+  rootBox: "w-full! max-w-full! min-w-0! border-border!",
+  cardBox: "w-full! max-w-full! min-w-0! border-border! shadow-none!",
+  card: "w-full! max-w-full! min-w-0! gap-5 rounded-none border-border! bg-transparent! p-0! shadow-none!",
+  main: "w-full! max-w-full! min-w-0! border-border!",
+  form: "w-full! max-w-full! min-w-0! border-border!",
   logoBox: "hidden",
   logoImage: "hidden",
   headerTitle: "hidden",
   headerSubtitle: "hidden",
+  socialButtons: "w-full! max-w-full! min-w-0! border-border!",
   socialButtonsBlockButton:
-    "h-9 rounded-md border! bg-transparent! text-foreground text-[13px] font-medium shadow-none! transition-colors hover:bg-accent",
+    "h-9 w-full! max-w-full! min-w-0! rounded-md border-border! bg-transparent! text-foreground text-[13px] font-medium shadow-none! transition-colors hover:bg-accent",
   socialButtonsBlockButtonText: "text-[13px] font-medium text-foreground!",
   dividerLine: "bg-border!",
   dividerText: "text-micro font-medium uppercase text-muted-foreground",
   formFieldLabel: "mb-1 text-caption font-medium text-foreground",
   formFieldInput:
-    "h-9 w-full rounded-md border! px-3 text-sm text-foreground shadow-none! outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20",
+    "h-9 w-full! max-w-full! min-w-0! rounded-md border-border! px-3 text-sm text-foreground shadow-none! outline-none transition-colors placeholder:text-muted-foreground focus:border-ring focus:ring-1! focus:ring-inset! focus:ring-ring!",
   formFieldErrorText: "mt-1 text-micro text-destructive",
   formButtonPrimary:
     "h-10 w-full rounded-md text-[13px] font-semibold shadow-none! transition-colors",
